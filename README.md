@@ -34,7 +34,7 @@ the complete command reference.
 After an official version has been tagged:
 
 ```sh
-go install github.com/gotcli/got-community@latest
+go install github.com/gotcli/got@latest
 got version
 got init --name catalog --module example.com/catalog --db pg
 cd catalog
@@ -50,7 +50,7 @@ GOT requires Go 1.22 or newer. After an official version has been tagged,
 install it with:
 
 ```sh
-go install github.com/gotcli/got-community@latest
+go install github.com/gotcli/got@latest
 ```
 
 Ensure the Go binary directory is in `PATH`, then verify with `got version`.

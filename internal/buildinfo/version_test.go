@@ -1,11 +1,11 @@
-package main
+package buildinfo
 
 import (
 	"runtime/debug"
 	"testing"
 )
 
-func TestVersionFromBuildInfo(t *testing.T) {
+func TestFromBuildInfo(t *testing.T) {
 	tests := []struct {
 		name string
 		info *debug.BuildInfo
@@ -40,9 +40,15 @@ func TestVersionFromBuildInfo(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := versionFromBuildInfo(test.info); got != test.want {
-				t.Fatalf("versionFromBuildInfo() = %q, want %q", got, test.want)
+			if got := FromBuildInfo(test.info); got != test.want {
+				t.Fatalf("FromBuildInfo() = %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestVersionPrefersOverride(t *testing.T) {
+	if got := Version("v9.9.9"); got != "v9.9.9" {
+		t.Fatalf("Version() = %q, want v9.9.9", got)
 	}
 }

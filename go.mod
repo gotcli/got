@@ -1,4 +1,4 @@
-module github.com/gotcli/got-community
+module github.com/gotcli/got
 
 go 1.22
 
