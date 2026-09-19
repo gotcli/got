@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/gotcli/got-community/internal/dbschema"
 	"github.com/gotcli/blueprints"
+	"github.com/gotcli/got-community/internal/dbschema"
 )
 
 type ProjectOptions struct {

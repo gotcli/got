@@ -10,6 +10,13 @@ GOT is a command-line generator for starting and extending Go services built
 with Fiber and GORM. It creates conventional project layers while leaving
 application-specific business logic in your hands.
 
+## Why GOT?
+
+GOT provides repeatable project structure and removes routine setup work while
+keeping the generated Go source readable and under your control. It is intended
+for real services rather than throwaway demos: generated projects can be built,
+tested, and extended using normal Go tooling.
+
 ## Features
 
 - Generate a standard API, a deployable microservice, or a multi-service workspace.
@@ -24,6 +31,8 @@ the complete command reference.
 
 ## Quick Start
 
+After an official version has been tagged:
+
 ```sh
 go install github.com/gotcli/got-community@latest
 got version
@@ -37,7 +46,8 @@ Run `got init` without flags for an interactive setup.
 
 ## Installation
 
-GOT requires Go 1.22 or newer. Install it from source:
+GOT requires Go 1.22 or newer. After an official version has been tagged,
+install it with:
 
 ```sh
 go install github.com/gotcli/got-community@latest
@@ -89,12 +99,35 @@ got --help
 got init --help
 ```
 
+## Community
+
+GOT Community is the complete free and open-source foundation of GOT. Bug
+reports, focused feature proposals, documentation improvements, and code
+contributions are welcome through the repository's GitHub issues and pull
+requests.
+
+## Support GOT
+
+GOT Community is free and open source. If GOT saves you time or helps your
+projects, you can support it by:
+
+- Starring the repository.
+- Reporting reproducible bugs.
+- Suggesting focused improvements.
+- Contributing code or documentation.
+- Sponsoring the project when an official sponsorship channel is available.
+
 ## Contributing
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before
 opening a pull request. Participation is governed by the
 [Code of Conduct](CODE_OF_CONDUCT.md). Please report vulnerabilities according
 to [SECURITY.md](SECURITY.md).
+
+## Security
+
+Do not publish vulnerability details or credentials in public issues. Follow
+the private reporting guidance in [SECURITY.md](SECURITY.md).
 
 ## License
 

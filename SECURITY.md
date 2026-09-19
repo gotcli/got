@@ -10,6 +10,9 @@ Security tab when it is available. If private reporting is unavailable, contact
 a maintainer through a private contact method listed on their GitHub profile
 and ask for a secure reporting channel without sending exploit details first.
 
+Before public launch, maintainers must enable and verify a private vulnerability
+reporting channel for this repository.
+
 Include the affected version, impact, reproduction steps, and any suggested
 mitigation in the private report. Maintainers will acknowledge the report,
 investigate it, and coordinate disclosure and remediation as appropriate.

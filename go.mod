@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/charmbracelet/huh v0.6.0
-	github.com/gotcli/blueprints v0.0.0-00010101000000-000000000000
+	github.com/gotcli/blueprints v0.1.0
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/microsoft/go-mssqldb v1.8.0
 	github.com/spf13/cobra v1.8.1
@@ -45,5 +45,3 @@ require (
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
 )
-
-replace github.com/gotcli/blueprints => ../blueprints
