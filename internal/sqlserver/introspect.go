@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/gotcli/got-community/internal/dbschema"
+	"github.com/gotcli/got/internal/dbschema"
 	_ "github.com/microsoft/go-mssqldb"
 )
 

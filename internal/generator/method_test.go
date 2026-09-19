@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gotcli/got-community/internal/dbschema"
+	"github.com/gotcli/got/internal/dbschema"
 )
 
 func methodTestProject(t *testing.T) string {

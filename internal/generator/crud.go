@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/gotcli/got-community/internal/dbschema"
+	"github.com/gotcli/got/internal/dbschema"
 )
 
 type crudData struct {

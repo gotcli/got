@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/gotcli/got-community/internal/generator"
+	"github.com/gotcli/got/internal/generator"
 	"github.com/spf13/cobra"
 )
 

@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gotcli/got-community/internal/dbschema"
-	"github.com/gotcli/got-community/internal/generator"
-	"github.com/gotcli/got-community/internal/postgres"
-	"github.com/gotcli/got-community/internal/sqlserver"
-	"github.com/gotcli/got-community/pkg/promtui"
+	"github.com/gotcli/got/internal/dbschema"
+	"github.com/gotcli/got/internal/generator"
+	"github.com/gotcli/got/internal/postgres"
+	"github.com/gotcli/got/internal/sqlserver"
+	"github.com/gotcli/got/pkg/promtui"
 	"github.com/spf13/cobra"
 )
 

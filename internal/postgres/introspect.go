@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gotcli/got-community/internal/dbschema"
+	"github.com/gotcli/got/internal/dbschema"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 )
