@@ -19,7 +19,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const minimumGoMinor = 22
+const minimumGoMinor = 25
 
 type doctorStatus string
 
@@ -137,14 +137,14 @@ func runDoctor(ctx context.Context, cwd, version string, options doctorOptions, 
 func checkToolchain(ctx context.Context, dependencies doctorDependencies) []doctorCheck {
 	checks := make([]doctorCheck, 0, 4)
 	if _, err := dependencies.lookPath("go"); err != nil {
-		checks = append(checks, doctorCheck{Status: doctorFail, Name: "Go", Message: "not found in PATH; install Go 1.22 or newer"})
+		checks = append(checks, doctorCheck{Status: doctorFail, Name: "Go", Message: "not found in PATH; install Go 1.25 or newer"})
 	} else {
 		output, err := dependencies.command(ctx, "go", "version")
 		version := strings.TrimSpace(string(output))
 		if err != nil {
 			checks = append(checks, doctorCheck{Status: doctorFail, Name: "Go", Message: "could not read version"})
 		} else if !supportedGoVersion(version) {
-			checks = append(checks, doctorCheck{Status: doctorFail, Name: "Go", Message: version + "; Go 1.22 or newer is required"})
+			checks = append(checks, doctorCheck{Status: doctorFail, Name: "Go", Message: version + "; Go 1.25 or newer is required"})
 		} else {
 			checks = append(checks, doctorCheck{Status: doctorPass, Name: "Go", Message: version})
 		}

@@ -63,7 +63,7 @@ var databases = map[string]struct {
 	"mssql": {driver: "sqlserver", module: "gorm.io/driver/sqlserver", dependency: "gorm.io/driver/sqlserver@v1.5.3"},
 }
 
-func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) error {
+func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) (returnErr error) {
 	g.logStep("validating project configuration")
 	if err := validateProjectName(options.Name); err != nil {
 		return err
@@ -99,6 +99,14 @@ func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) 
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("inspect destination: %w", err)
 	}
+	if err := os.Mkdir(projectPath, 0o755); err != nil {
+		return fmt.Errorf("create project: %w", err)
+	}
+	defer func() {
+		if returnErr != nil {
+			_ = os.RemoveAll(projectPath)
+		}
+	}()
 
 	g.logStep("creating project files in %s", projectPath)
 	data := templateData{
@@ -144,7 +152,7 @@ func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) 
 	}
 	commands := [][]string{
 		{"go", "mod", "init", options.Module},
-		{"go", "mod", "edit", "-go=1.22", "-toolchain=go1.22.1"},
+		{"go", "mod", "edit", "-go=1.25.0", "-toolchain=go1.25.0"},
 		{"go", "get", "github.com/gofiber/fiber/v2@v2.52.5", "github.com/spf13/viper@v1.19.0", "gorm.io/gorm@v1.25.12", database.dependency, "github.com/shopspring/decimal@v1.4.0"},
 	}
 	commandSteps := []string{"initializing Go module", "setting Go toolchain", "installing project dependencies"}

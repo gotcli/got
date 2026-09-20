@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/charmbracelet/huh v0.6.0
-	github.com/gotcli/blueprints v0.1.0
+	github.com/gotcli/blueprints v0.2.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/microsoft/go-mssqldb v1.8.0
 	github.com/spf13/cobra v1.8.1

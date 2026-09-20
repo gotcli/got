@@ -20,7 +20,7 @@ Go Templatify — General-purpose Go/Fiber Project Generator
 
 ## 2. การติดตั้ง
 
-การติดตั้ง GOT จาก source ต้องใช้ Go 1.25 ขึ้นไป:
+การติดตั้ง GOT จาก source และการ build โปรเจกต์ที่สร้างใหม่ต้องใช้ Go 1.25 ขึ้นไป:
 
 ```sh
 go install github.com/gotcli/got@latest

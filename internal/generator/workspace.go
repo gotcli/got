@@ -208,7 +208,7 @@ func writeOrReplaceFile(path string, content []byte) error {
 
 func renderGoWork(services []string) string {
 	var b strings.Builder
-	b.WriteString("go 1.22.0\ntoolchain go1.22.1\n\nuse (\n")
+	b.WriteString("go 1.25.0\ntoolchain go1.25.0\n\nuse (\n")
 	for _, service := range services {
 		fmt.Fprintf(&b, "\t./%s\n", service)
 	}

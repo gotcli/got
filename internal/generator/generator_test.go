@@ -36,6 +36,9 @@ func TestProjectGeneratorCreatesProject(t *testing.T) {
 	if len(runner.calls) != 4 {
 		t.Fatalf("expected 4 Go commands, got %d", len(runner.calls))
 	}
+	if got := strings.Join(runner.calls[1], " "); got != "go mod edit -go=1.25.0 -toolchain=go1.25.0" {
+		t.Fatalf("toolchain command = %q", got)
+	}
 	for _, step := range []string{"validating project configuration", "creating project files", "installing project dependencies", "project generation completed"} {
 		if !strings.Contains(output.String(), step) {
 			t.Errorf("step log does not contain %q:\n%s", step, output.String())
@@ -60,6 +63,20 @@ func TestProjectGeneratorRejectsExistingDestination(t *testing.T) {
 	}
 }
 
+func TestProjectGeneratorRemovesNewDestinationWhenCommandFails(t *testing.T) {
+	parent := t.TempDir()
+	project := filepath.Join(parent, "orders")
+	err := (ProjectGenerator{Runner: failingRunner{}}).Generate(context.Background(), ProjectOptions{
+		Name: "orders", Module: "example.com/orders", Database: "pg", ParentPath: parent,
+	})
+	if err == nil || !strings.Contains(err.Error(), "runner failed") {
+		t.Fatalf("expected command failure, got %v", err)
+	}
+	if _, statErr := os.Stat(project); !os.IsNotExist(statErr) {
+		t.Fatalf("failed generation left destination behind: %v", statErr)
+	}
+}
+
 func TestProjectGeneratorCreatesMicroserviceAssets(t *testing.T) {
 	parent := t.TempDir()
 	err := (ProjectGenerator{Runner: &recordedRunner{}}).Generate(context.Background(), ProjectOptions{
@@ -76,6 +93,7 @@ func TestProjectGeneratorCreatesMicroserviceAssets(t *testing.T) {
 	}
 	assertFileContains(t, filepath.Join(project, "main.go"), "signal.NotifyContext")
 	assertFileContains(t, filepath.Join(project, "routes", "health.go"), `app.Get("/health/ready"`)
+	assertFileContains(t, filepath.Join(project, "Dockerfile"), "FROM golang:1.25-alpine AS build")
 }
 
 func TestProjectGeneratorRejectsUnknownArchitecture(t *testing.T) {

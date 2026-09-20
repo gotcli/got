@@ -32,6 +32,8 @@ func TestWorkspaceGeneratorCreatesIndependentServices(t *testing.T) {
 		}
 	}
 	assertFileContains(t, filepath.Join(root, "go.work"), "./order-service")
+	assertFileContains(t, filepath.Join(root, "go.work"), "go 1.25.0")
+	assertFileContains(t, filepath.Join(root, "go.work"), "toolchain go1.25.0")
 	assertFileContains(t, filepath.Join(root, "compose.yml"), `"3001:3000"`)
 	assertFileContains(t, filepath.Join(root, "compose.yml"), `"3003:3000"`)
 	if len(runner.calls) != 12 {

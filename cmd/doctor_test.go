@@ -17,7 +17,8 @@ func TestSupportedGoVersion(t *testing.T) {
 		value string
 		want  bool
 	}{
-		{value: "go version go1.22.1 darwin/arm64", want: true},
+		{value: "go version go1.22.1 darwin/arm64", want: false},
+		{value: "go version go1.25.0 darwin/arm64", want: true},
 		{value: "go version go1.25.0 linux/amd64", want: true},
 		{value: "go version go1.21.9 windows/amd64", want: false},
 		{value: "unexpected", want: false},
@@ -54,7 +55,7 @@ func TestDockerDaemonCheckDetectsErrorTextWithZeroExitCode(t *testing.T) {
 
 func TestDoctorProjectDoesNotExposeSecrets(t *testing.T) {
 	root := t.TempDir()
-	writeDoctorFile(t, filepath.Join(root, "go.mod"), "module example.com/customer-api\n\ngo 1.22\n")
+	writeDoctorFile(t, filepath.Join(root, "go.mod"), "module example.com/customer-api\n\ngo 1.25.0\n")
 	writeDoctorFile(t, filepath.Join(root, "config.yml"), `APP_PORT: 3000
 LOG_DIR: "logs"
 DB_HOST: "localhost"
@@ -111,7 +112,7 @@ func TestDoctorCommandJSONAndFailureExit(t *testing.T) {
 		},
 		command: func(_ context.Context, name string, _ ...string) ([]byte, error) {
 			if name == "go" {
-				return []byte("go version go1.22.1 test/arch"), nil
+				return []byte("go version go1.25.0 test/arch"), nil
 			}
 			return nil, nil
 		},

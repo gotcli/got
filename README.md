@@ -46,8 +46,8 @@ Run `got init` without flags for an interactive setup.
 
 ## Installation
 
-Installing GOT from source requires Go 1.25 or newer. After an official version has been tagged,
-install it with:
+Installing GOT from source and building newly generated projects require Go
+1.25 or newer. After an official version has been tagged, install it with:
 
 ```sh
 go install github.com/gotcli/got@latest
