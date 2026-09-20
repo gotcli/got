@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-
   pull_request:
     branches:
       - main
@@ -20,13 +19,10 @@ env:
   GO_VERSION: "1.22.x"
 
 jobs:
-  # ─────────────────────────────────────────────
-  # Code Quality
-  # ─────────────────────────────────────────────
-  quality:
-    name: Code Quality
+  validate:
+    name: Validate
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -38,59 +34,40 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Download dependencies
+      # Dependencies
+      - name: Dependencies | Download
         run: go mod download
 
-      - name: Verify dependencies
+      - name: Dependencies | Verify checksums
         run: go mod verify
 
-      - name: Verify module files are tidy
+      - name: Dependencies | Verify module files are tidy
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum
 
-      - name: Check formatting
+      # Code Quality
+      - name: Code Quality | Check formatting
         shell: bash
         run: |
           files="$(gofmt -l .)"
-
           if [ -n "$files" ]; then
             echo "::error::The following files are not formatted:"
             echo "$files"
             exit 1
           fi
 
-      - name: Run go vet
+      - name: Code Quality | Run go vet
         run: go vet ./...
 
-      - name: Install Staticcheck
+      - name: Code Quality | Install Staticcheck
         run: go install honnef.co/go/tools/cmd/staticcheck@latest
 
-      - name: Run Staticcheck
+      - name: Code Quality | Run Staticcheck
         run: staticcheck ./...
 
-  # ─────────────────────────────────────────────
-  # Tests
-  # ─────────────────────────────────────────────
-  test:
-    name: Tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run tests
+      # Tests
+      - name: Tests | Run with race detector and coverage
         run: |
           go test \
             -v \
@@ -99,68 +76,23 @@ jobs:
             -coverprofile=coverage.out \
             ./...
 
-      - name: Show coverage
+      - name: Tests | Show coverage
         run: go tool cover -func=coverage.out
 
-      - name: Upload coverage artifact
+      - name: Tests | Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage.out
           retention-days: 7
 
-  # ─────────────────────────────────────────────
-  # Security
-  # ─────────────────────────────────────────────
-  security:
-    name: Security
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Install govulncheck
+      # Security
+      - name: Security | Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
 
-      - name: Run govulncheck
+      - name: Security | Run govulncheck
         run: govulncheck ./...
 
-  # ─────────────────────────────────────────────
-  # Build
-  # ─────────────────────────────────────────────
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    needs:
-      - quality
-      - test
-      - security
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Build
+      # Build
+      - name: Build | Compile all packages
         run: go build ./...

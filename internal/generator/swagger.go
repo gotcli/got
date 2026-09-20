@@ -26,7 +26,7 @@ func (SwaggerGenerator) Generate(projectPath string) (returnErr error) {
 	}
 	for path := range files {
 		if _, err := os.Stat(filepath.Join(projectPath, path)); err == nil {
-			return fmt.Errorf("Swagger component already exists: %s", path)
+			return fmt.Errorf("swagger component already exists: %s", path)
 		} else if !os.IsNotExist(err) {
 			return fmt.Errorf("inspect %s: %w", path, err)
 		}
@@ -37,7 +37,7 @@ func (SwaggerGenerator) Generate(projectPath string) (returnErr error) {
 		return fmt.Errorf("read config.yml: %w", err)
 	}
 	if strings.Contains(string(config), swaggerConfigMarker) {
-		return fmt.Errorf("Swagger configuration already exists in %s", configPath)
+		return fmt.Errorf("swagger configuration already exists in %s", configPath)
 	}
 	mainPath := filepath.Join(projectPath, "main.go")
 	mainSource, err := os.ReadFile(mainPath)
@@ -98,7 +98,7 @@ func (SwaggerGenerator) Generate(projectPath string) (returnErr error) {
 
 func addSwaggerRegistration(source []byte) ([]byte, error) {
 	if strings.Contains(string(source), "routes.RegisterSwaggerRoutes(") {
-		return nil, fmt.Errorf("Swagger route registration already exists")
+		return nil, fmt.Errorf("swagger route registration already exists")
 	}
 	patterns := []string{"routes.RegisterRootRoutes(conn, app)", "routes.RegisterRootRoutes(conn,app)"}
 	updated := string(source)

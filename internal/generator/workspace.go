@@ -70,7 +70,7 @@ func (g WorkspaceGenerator) Generate(ctx context.Context, options WorkspaceOptio
 		if g.Output != nil {
 			fmt.Fprintf(g.Output, "[step] generating workspace service %s\n", service)
 		}
-		if err := (ProjectGenerator{Runner: g.Runner, Output: g.Output}).Generate(ctx, ProjectOptions{Name: service, Module: manifest.Module + "/" + service, Architecture: "microservice", Database: manifest.Database, ParentPath: root}); err != nil {
+		if err := ProjectGenerator(g).Generate(ctx, ProjectOptions{Name: service, Module: manifest.Module + "/" + service, Architecture: "microservice", Database: manifest.Database, ParentPath: root}); err != nil {
 			return fmt.Errorf("generate service %s: %w", service, err)
 		}
 	}
@@ -98,7 +98,7 @@ func (g WorkspaceGenerator) AddService(ctx context.Context, root, name string) e
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	if err := (ProjectGenerator{Runner: g.Runner, Output: g.Output}).Generate(ctx, ProjectOptions{Name: service, Module: manifest.Module + "/" + service, Architecture: "microservice", Database: manifest.Database, ParentPath: root}); err != nil {
+	if err := ProjectGenerator(g).Generate(ctx, ProjectOptions{Name: service, Module: manifest.Module + "/" + service, Architecture: "microservice", Database: manifest.Database, ParentPath: root}); err != nil {
 		_ = os.RemoveAll(servicePath)
 		return err
 	}

@@ -174,7 +174,7 @@ func dockerDaemonCheck(output []byte, err error) doctorCheck {
 	failedMessage := message == "" || strings.Contains(lower, "permission denied") || strings.Contains(lower, "cannot connect") || strings.Contains(lower, "error during connect")
 	if err != nil || failedMessage {
 		if err == nil {
-			err = errors.New("Docker daemon is not reachable")
+			err = errors.New("docker daemon is not reachable")
 		}
 		return doctorCheck{Status: doctorWarn, Name: "Docker daemon", Message: compactCommandError(output, err)}
 	}

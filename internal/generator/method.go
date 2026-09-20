@@ -57,7 +57,7 @@ func (MethodGenerator) Generate(projectPath string, options MethodOptions) error
 
 func scaffoldMethodFeature(projectPath, module string, options MethodOptions) error {
 	entity := singularTypeName(options.Folder)
-	data := struct{ Module, Folder, Entity, Method, Verb, Path string }{module, options.Folder, entity, options.Name, strings.Title(strings.ToLower(options.HTTPMethod)), options.Path}
+	data := struct{ Module, Folder, Entity, Method, Verb, Path string }{module, options.Folder, entity, options.Name, fiberMethodName(options.HTTPMethod), options.Path}
 	files := map[string]string{
 		filepath.Join("repositories", options.Folder, "interface.go"):       methodRepoInterface,
 		filepath.Join("repositories", options.Folder, options.Folder+".go"): methodRepo,
@@ -280,7 +280,7 @@ func addRouteMethod(path string, options MethodOptions) error {
 	if err != nil {
 		return err
 	}
-	verb := strings.Title(strings.ToLower(options.HTTPMethod))
+	verb := fiberMethodName(options.HTTPMethod)
 	for _, decl := range file.Decls {
 		fn, ok := decl.(*ast.FuncDecl)
 		if !ok || !strings.HasPrefix(fn.Name.Name, "Register") {
@@ -319,6 +319,14 @@ func addRouteMethod(path string, options MethodOptions) error {
 		return writeGoFile(path, fset, file)
 	}
 	return fmt.Errorf("route registration function not found in %s", path)
+}
+
+func fiberMethodName(method string) string {
+	method = strings.ToLower(method)
+	if method == "" {
+		return ""
+	}
+	return strings.ToUpper(method[:1]) + method[1:]
 }
 
 func kebabCase(value string) string { return strings.ReplaceAll(toSnakeCase(value), "_", "-") }
