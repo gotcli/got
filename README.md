@@ -46,7 +46,7 @@ Run `got init` without flags for an interactive setup.
 
 ## Installation
 
-GOT requires Go 1.22 or newer. After an official version has been tagged,
+Installing GOT from source requires Go 1.25 or newer. After an official version has been tagged,
 install it with:
 
 ```sh

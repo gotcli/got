@@ -4,7 +4,7 @@ Thank you for helping improve GOT Community.
 
 ## Development requirements
 
-- Go 1.22 or newer
+- Go 1.25 or newer
 - Git
 - Docker is optional and is only needed to exercise generated container files
 - PostgreSQL or SQL Server is optional and is only needed for live schema inspection
