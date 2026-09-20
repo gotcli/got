@@ -11,6 +11,7 @@ import (
 
 	"github.com/gotcli/blueprints"
 	"github.com/gotcli/got/internal/dbschema"
+	"github.com/gotcli/got/internal/toolchain"
 )
 
 type ProjectOptions struct {
@@ -152,7 +153,7 @@ func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) 
 	}
 	commands := [][]string{
 		{"go", "mod", "init", options.Module},
-		{"go", "mod", "edit", "-go=1.25.0", "-toolchain=go1.25.0"},
+		{"go", "mod", "edit", "-go=" + toolchain.GoVersion, "-toolchain=" + toolchain.GoToolchain},
 		{"go", "get", "github.com/gofiber/fiber/v2@v2.52.5", "github.com/spf13/viper@v1.19.0", "gorm.io/gorm@v1.25.12", database.dependency, "github.com/shopspring/decimal@v1.4.0"},
 	}
 	commandSteps := []string{"initializing Go module", "setting Go toolchain", "installing project dependencies"}

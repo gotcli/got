@@ -21,13 +21,7 @@ func NewPromptUI() PromptUI {
 	return &promptUI{}
 }
 
-/*
-*
-
-	TL;DR: Use charmbracelet/huh to run interactive ui promt.
-
-*
-*/
+// AskForInput reads text using the interactive prompt.
 func (p *promptUI) AskForInput(title string, isRequired bool) (string, error) {
 	return p.askForText(title, isRequired, huh.EchoModeNormal)
 }
@@ -67,10 +61,10 @@ func (p *promptUI) askForText(title string, isRequired bool, echoMode huh.EchoMo
 func (p *promptUI) AskForSelect(title string, options []huh.Option[string], isRequired bool) (string, error) {
 	var selected string
 
-	promt := huh.NewSelect[string]().Title(title).Options(options...).Value(&selected)
+	prompt := huh.NewSelect[string]().Title(title).Options(options...).Value(&selected)
 
-	if err := promt.Run(); err != nil {
-		return selected, fmt.Errorf("uh oh: %s", err.Error())
+	if err := prompt.Run(); err != nil {
+		return selected, fmt.Errorf("prompt for %s: %w", title, err)
 	}
 
 	return selected, nil
@@ -79,14 +73,14 @@ func (p *promptUI) AskForSelect(title string, options []huh.Option[string], isRe
 func (p *promptUI) AskForYesNo(title string, isRequired bool) (bool, error) {
 	var val bool
 
-	promt := huh.NewConfirm().
+	prompt := huh.NewConfirm().
 		Title(title).
 		Affirmative("Yes!").
 		Negative("No.").
 		Value(&val)
 
-	if err := promt.Run(); err != nil {
-		return val, fmt.Errorf("uh oh: %s", err.Error())
+	if err := prompt.Run(); err != nil {
+		return val, fmt.Errorf("prompt for %s: %w", title, err)
 	}
 
 	return val, nil
