@@ -184,7 +184,7 @@ GOT Core.
 - CLI and blueprint releases are separate, but compatibility is enforced mostly
   by pinned versions and CLI tests rather than a declared compatibility policy.
 - Dependency versions and the Go output policy are embedded in multiple places.
-  The CLI and generated projects now target Go 1.25, but that shared policy
+  The CLI and generated projects now target Go 1.26, but that shared policy
   should be named centrally and covered by contract tests.
 - `got api` scaffolds non-context methods while introspected CRUD uses context,
   producing two repository/service conventions.

@@ -46,6 +46,7 @@ type step struct {
 var steps = []step{
 	{id: "gitignore-indentation", description: "make .gitignore patterns match (config.yml with secrets was not ignored)", plan: planGitignore},
 	{id: "database-connect-error", description: "return database connection errors instead of panicking", plan: planConnectError},
+	{id: "go-toolchain-security", description: toolchainDescription, plan: planToolchain},
 	{id: "project-manifest", description: "record the project in " + generator.ProjectManifestName, plan: planManifest},
 }
 

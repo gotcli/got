@@ -18,8 +18,9 @@ func TestSupportedGoVersion(t *testing.T) {
 		want  bool
 	}{
 		{value: "go version go1.22.1 darwin/arm64", want: false},
-		{value: "go version go1.25.0 darwin/arm64", want: true},
-		{value: "go version go1.25.0 linux/amd64", want: true},
+		{value: "go version go1.25.14 darwin/arm64", want: false}, // end of life
+		{value: "go version go1.26.0 darwin/arm64", want: true},
+		{value: "go version go1.27.2 linux/amd64", want: true},
 		{value: "go version go1.21.9 windows/amd64", want: false},
 		{value: "unexpected", want: false},
 	}
@@ -112,7 +113,7 @@ func TestDoctorCommandJSONAndFailureExit(t *testing.T) {
 		},
 		command: func(_ context.Context, name string, _ ...string) ([]byte, error) {
 			if name == "go" {
-				return []byte("go version go1.25.0 test/arch"), nil
+				return []byte("go version go1.26.9 test/arch"), nil
 			}
 			return nil, nil
 		},

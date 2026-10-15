@@ -35,7 +35,8 @@ and [User-Guide.md](User-Guide.md) for detailed workflows.
 
 ## Requirements
 
-- Go 1.25 or newer, to install GOT and to build generated projects.
+- Go 1.26 or newer, to install GOT and to build generated projects. Go 1.25
+  no longer receives security fixes.
 - A PostgreSQL, MySQL, or SQL Server database for generated services to
   connect to at startup.
 - Docker (optional), for container builds and the quick start database below.

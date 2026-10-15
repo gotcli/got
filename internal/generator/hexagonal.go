@@ -65,7 +65,7 @@ func hexagonalFiles() (map[string]string, error) {
 		".gitignore":                  blueprints.GitIgnore,
 		".dockerignore":               blueprints.MicroserviceDockerIgnore,
 		"config.yml":                  blueprints.ConfigYml,
-		"Dockerfile":                  strings.ReplaceAll(hexagonalDockerfile, "{{GO_VERSION}}", toolchain.GoVersion),
+		"Dockerfile":                  strings.ReplaceAll(hexagonalDockerfile, "{{GO_VERSION}}", toolchain.DockerImage),
 		"cmd/main.go":                 hexagonalMain,
 		"internal/app.go":             hexagonalApp,
 		"internal/domain/registry.go": hexagonalDomainRegistry,

@@ -13,8 +13,37 @@ got upgrade             # refuses files with uncommitted Git changes
 git diff
 ```
 
-This fixes `.gitignore` (see Fixed) and makes `ConnectDB` return an error. Code
+This fixes `.gitignore` (see Fixed), moves builds to a supported Go release
+(see Security), and makes `ConnectDB` return an error. Code
 you changed yourself is reported as a manual step and left untouched.
+
+### Security
+
+- **Go 1.26 is now required.** Go 1.25 no longer receives security fixes, and
+  its standard library has known vulnerabilities in `net/http`, `crypto/tls`,
+  and `mime/multipart`. GOT itself, its CI, and generated projects now target
+  Go 1.26 (`go 1.26.0`, `toolchain go1.26.9`).
+- **Generated Dockerfiles built services with an unsupported Go.** Workspace
+  services used the pinned `golang:1.25.0-alpine` image. Dockerfiles now use
+  `golang:1.26-alpine`, so rebuilding an image picks up new patch releases.
+  `got upgrade` raises the toolchain directive in `go.mod` and `go.work` and the
+  Dockerfile image of existing projects; rebuild and redeploy your images.
+- **Generated projects pinned vulnerable modules.** New projects now install
+  `gofiber/fiber/v2` v2.52.15 (was v2.52.5), `jackc/pgx/v5` v5.9.2 (was v5.5.5
+  through the PostgreSQL driver), and `golang.org/x/text` v0.41.0 (was
+  v0.14.0). `got upgrade` does not change module versions; in existing
+  projects run:
+
+  ```sh
+  go get github.com/gofiber/fiber/v2@v2.52.15 golang.org/x/text@v0.41.0
+  go get github.com/jackc/pgx/v5@v5.9.2   # PostgreSQL projects
+  go mod tidy
+  govulncheck ./...
+  ```
+
+- CI now scans a generated project of every architecture and database with
+  `govulncheck`, so a vulnerable pin fails the build.
+- GOT's own `golang.org/x/text` dependency updated to v0.41.0.
 
 ### Changed (output of new projects)
 

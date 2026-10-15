@@ -37,28 +37,40 @@ given, so every upgrade can be reviewed with "git diff". Use --dry-run first.`,
 			}
 			out := cmd.OutOrStdout()
 			pending, manual := 0, 0
-			for index, project := range projects {
-				results, err := upgrade.Plan(project.Path, cfg.version)
+			type target struct {
+				path, label string
+				plan        func() ([]upgrade.Result, error)
+			}
+			var targets []target
+			if workspace {
+				targets = append(targets, target{cfg.cwd, "workspace", func() ([]upgrade.Result, error) { return upgrade.PlanWorkspace(cfg.cwd) }})
+			}
+			for _, project := range projects {
+				path := project.Path
+				targets = append(targets, target{path, filepath.Base(path), func() ([]upgrade.Result, error) { return upgrade.Plan(path, cfg.version) }})
+			}
+			for index, project := range targets {
+				results, err := project.plan()
 				if err != nil {
-					return fmt.Errorf("%s: %w", project.Path, err)
+					return fmt.Errorf("%s: %w", project.path, err)
 				}
 				if index > 0 {
 					fmt.Fprintln(out)
 				}
 				if workspace {
-					fmt.Fprintf(out, "# %s\n", filepath.Base(project.Path))
+					fmt.Fprintf(out, "# %s\n", project.label)
 				}
 				var files []string
 				for _, result := range results {
 					files = append(files, result.Files...)
 				}
 				if !dryRun && !force && len(files) > 0 {
-					dirty, err := uncommittedFiles(project.Path, files)
+					dirty, err := uncommittedFiles(project.path, files)
 					if err != nil {
 						return err
 					}
 					if len(dirty) > 0 {
-						return fmt.Errorf("%s: refusing to overwrite files with uncommitted changes: %s (commit or stash them, or use --force)", project.Path, strings.Join(dirty, ", "))
+						return fmt.Errorf("%s: refusing to overwrite files with uncommitted changes: %s (commit or stash them, or use --force)", project.path, strings.Join(dirty, ", "))
 					}
 				}
 				for _, result := range results {
@@ -80,7 +92,7 @@ given, so every upgrade can be reviewed with "git diff". Use --dry-run first.`,
 				if dryRun {
 					continue
 				}
-				if err := upgrade.Apply(project.Path, results); err != nil {
+				if err := upgrade.Apply(project.path, results); err != nil {
 					return err
 				}
 			}

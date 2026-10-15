@@ -33,8 +33,8 @@ func TestWorkspaceGeneratorCreatesIndependentServices(t *testing.T) {
 	}
 	assertFileContains(t, filepath.Join(root, "go.work"), "./services/order-service")
 	assertFileContains(t, filepath.Join(root, "go.work"), "./libs")
-	assertFileContains(t, filepath.Join(root, "go.work"), "go 1.25.0")
-	assertFileContains(t, filepath.Join(root, "go.work"), "toolchain go1.25.0")
+	assertFileContains(t, filepath.Join(root, "go.work"), "go 1.26.0")
+	assertFileContains(t, filepath.Join(root, "go.work"), "toolchain go1.26.9")
 	assertFileContains(t, filepath.Join(root, "deploy", "compose.yml"), "dockerfile: services/order-service/Dockerfile")
 	assertFileContains(t, filepath.Join(root, "deploy", "compose.yml"), `"3001:3000"`)
 	assertFileContains(t, filepath.Join(root, "deploy", "compose.yml"), `"3003:3000"`)
@@ -51,7 +51,7 @@ func TestWorkspaceGeneratorCreatesIndependentServices(t *testing.T) {
 			t.Fatalf("in-repository libs must keep its replace directive, got %q", call)
 		}
 	}
-	assertFileContains(t, filepath.Join(root, "services", "auth-service", "Dockerfile"), "FROM golang:1.25.0-alpine")
+	assertFileContains(t, filepath.Join(root, "services", "auth-service", "Dockerfile"), "FROM golang:1.26-alpine")
 }
 
 func TestWorkspaceGeneratorUsesExternalSharedModuleWithoutPersistentReplace(t *testing.T) {

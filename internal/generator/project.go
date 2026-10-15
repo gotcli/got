@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/gotcli/blueprints"
 	"github.com/gotcli/got/internal/dbschema"
@@ -141,7 +143,11 @@ func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) 
 	if options.Architecture == "microservice" {
 		files["main.go"] = blueprints.MicroserviceMain
 		files["routes/health.go"] = blueprints.MicroserviceHealth
-		files["Dockerfile"] = blueprints.MicroserviceDockerfile
+		dockerfile, err := microserviceDockerfile()
+		if err != nil {
+			return err
+		}
+		files["Dockerfile"] = dockerfile
 		files[".dockerignore"] = blueprints.MicroserviceDockerIgnore
 	}
 	paths := make([]string, 0, len(files))
@@ -175,7 +181,7 @@ func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) 
 	commands := [][]string{
 		{"go", "mod", "init", options.Module},
 		{"go", "mod", "edit", "-go=" + toolchain.GoVersion, "-toolchain=" + toolchain.GoToolchain},
-		{"go", "get", "github.com/gofiber/fiber/v2@v2.52.5", "github.com/spf13/viper@v1.19.0", "gorm.io/gorm@v1.25.12", database.dependency, "github.com/shopspring/decimal@v1.4.0"},
+		append([]string{"go", "get"}, projectDependencies(options.Database)...),
 	}
 	commandSteps := []string{"initializing Go module", "setting Go toolchain", "installing project dependencies"}
 	for index, command := range commands {
@@ -201,3 +207,15 @@ func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) 
 	g.logStep("project generation completed")
 	return nil
 }
+
+// microserviceDockerfile applies the toolchain policy to the blueprint's build
+// image, so generated images use a Go release that still receives fixes.
+func microserviceDockerfile() (string, error) {
+	match := dockerGoImage.FindString(blueprints.MicroserviceDockerfile)
+	if match == "" {
+		return "", fmt.Errorf("blueprint MicroserviceDockerfile: golang build image not found")
+	}
+	return strings.Replace(blueprints.MicroserviceDockerfile, match, "golang:"+toolchain.DockerImage+"-alpine", 1), nil
+}
+
+var dockerGoImage = regexp.MustCompile(`golang:[0-9][0-9.]*-alpine`)

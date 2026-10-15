@@ -136,3 +136,45 @@ func TestUpgradeManifestVersionTracking(t *testing.T) {
 		}
 	}
 }
+
+func TestRaiseToolchain(t *testing.T) {
+	tests := []struct{ name, in, want string }{
+		{"adds a missing toolchain", "module m\n\ngo 1.25.0\n\nrequire x v1\n", "module m\n\ngo 1.25.0\n\ntoolchain go1.26.9\n\nrequire x v1\n"},
+		{"raises an old toolchain", "module m\n\ngo 1.25.0\n\ntoolchain go1.25.0\n", "module m\n\ngo 1.25.0\n\ntoolchain go1.26.9\n"},
+		{"keeps a newer toolchain", "module m\n\ngo 1.25.0\n\ntoolchain go1.27.2\n", ""},
+		{"keeps a newer language version", "module m\n\ngo 1.27\n", ""},
+		{"go.work", "go 1.25.0\ntoolchain go1.25.0\n\nuse (\n\t./a\n)\n", "go 1.25.0\ntoolchain go1.26.9\n\nuse (\n\t./a\n)\n"},
+	}
+	for _, test := range tests {
+		got, changed := raiseToolchain([]byte(test.in))
+		if test.want == "" {
+			if changed {
+				t.Errorf("%s: changed to %q", test.name, got)
+			}
+			continue
+		}
+		if !changed || string(got) != test.want {
+			t.Errorf("%s:\n got %q\nwant %q", test.name, got, test.want)
+		}
+	}
+}
+
+func TestRaiseDockerImage(t *testing.T) {
+	for in, want := range map[string]string{
+		"FROM golang:1.25-alpine AS build":   "FROM golang:1.26-alpine AS build",
+		"FROM golang:1.25.0-alpine AS build": "FROM golang:1.26-alpine AS build",
+		"FROM golang:1.26-alpine AS build":   "",
+		"FROM golang:1.27.2-alpine AS build": "",
+	} {
+		got, changed := raiseDockerImage([]byte(in))
+		if want == "" {
+			if changed {
+				t.Errorf("%q changed to %q", in, got)
+			}
+			continue
+		}
+		if string(got) != want {
+			t.Errorf("%q -> %q, want %q", in, got, want)
+		}
+	}
+}

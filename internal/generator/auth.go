@@ -61,7 +61,7 @@ func (g AuthGenerator) Generate(ctx context.Context, projectPath string, options
 	}
 	// Install first so a network failure does not leave generated files that
 	// prevent the user from retrying the command.
-	if err := runner.Run(ctx, projectPath, "go", "get", "github.com/golang-jwt/jwt/v5@v5.3.1"); err != nil {
+	if err := runner.Run(ctx, projectPath, "go", "get", "github.com/golang-jwt/jwt/v5@"+jwtVersion); err != nil {
 		return fmt.Errorf("install JWT dependency: %w", err)
 	}
 	for path, source := range files {

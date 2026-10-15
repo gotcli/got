@@ -15,7 +15,7 @@ func configureWorkspaceService(ctx context.Context, runner CommandRunner, servic
 	if err := useSharedInfrastructure(servicePath, manifest); err != nil {
 		return err
 	}
-	dockerfile := strings.NewReplacer("{{SERVICE}}", filepath.Base(servicePath), "{{GO_VERSION}}", toolchain.GoVersion).Replace(workspaceServiceDockerfile)
+	dockerfile := strings.NewReplacer("{{SERVICE}}", filepath.Base(servicePath), "{{GO_VERSION}}", toolchain.DockerImage).Replace(workspaceServiceDockerfile)
 	if err := writeOrReplaceFile(filepath.Join(servicePath, "Dockerfile"), []byte(dockerfile)); err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func writeSharedModule(root string, manifest workspaceManifest) error {
 		return err
 	}
 	files := map[string][]byte{
-		"go.mod":                             []byte(fmt.Sprintf("module %s\n\ngo %s\n\ntoolchain %s\n\nrequire (\n\tgithub.com/gofiber/fiber/v2 v2.52.5\n\tgorm.io/gorm v1.25.12\n)\n", module, toolchain.GoVersion, toolchain.GoToolchain)),
+		"go.mod":                             []byte(fmt.Sprintf("module %s\n\ngo %s\n\ntoolchain %s\n\nrequire (\n\tgithub.com/gofiber/fiber/v2 %s\n\tgorm.io/gorm %s\n)\n", module, toolchain.GoVersion, toolchain.GoToolchain, fiberVersion, gormVersion)),
 		filepath.Join("logger", "logger.go"): logger,
 		filepath.Join("middleware", "middleware.go"): middleware,
 	}

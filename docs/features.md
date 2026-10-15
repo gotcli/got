@@ -4,7 +4,7 @@
 
 GOT เป็น CLI และ source generator สำหรับสร้าง Go/Fiber application โค้ดที่
 สร้างขึ้นเป็นของ application และไม่ต้องพึ่ง GOT runtime ขณะทำงาน โปรเจกต์ใหม่
-ใช้ Go 1.25, Fiber, Viper และ GORM
+ใช้ Go 1.26 (toolchain go1.26.9), Fiber, Viper และ GORM
 
 ## คำสั่งที่ใช้งานได้
 
@@ -272,7 +272,7 @@ Microservice architecture เพิ่ม:
 - HTTP read, write และ idle timeouts
 - `GET /health/live`
 - `GET /health/ready` พร้อม database readiness check
-- Multi-stage Dockerfile ที่ใช้ Go 1.25
+- Multi-stage Dockerfile ที่ใช้ image `golang:1.26-alpine` (build ใหม่จะได้ patch ล่าสุดเสมอ)
 - Distroless runtime image
 
 ## ความปลอดภัยของ generator

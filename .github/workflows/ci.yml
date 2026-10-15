@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.25.x"
+  GO_VERSION: "1.26.x"
 
 jobs:
   validate:
@@ -92,6 +92,9 @@ jobs:
 
       - name: Security | Run govulncheck
         run: govulncheck ./...
+
+      - name: Security | Scan generated projects
+        run: .github/scripts/scan-generated-projects.sh
 
       # Build
       - name: Build | Compile all packages

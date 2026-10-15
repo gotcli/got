@@ -36,7 +36,7 @@ func TestProjectGeneratorCreatesProject(t *testing.T) {
 	if len(runner.calls) != 4 {
 		t.Fatalf("expected 4 Go commands, got %d", len(runner.calls))
 	}
-	if got := strings.Join(runner.calls[1], " "); got != "go mod edit -go=1.25.0 -toolchain=go1.25.0" {
+	if got := strings.Join(runner.calls[1], " "); got != "go mod edit -go=1.26.0 -toolchain=go1.26.9" {
 		t.Fatalf("toolchain command = %q", got)
 	}
 	for _, step := range []string{"validating project configuration", "creating project files", "installing project dependencies", "project generation completed"} {
@@ -95,7 +95,7 @@ func TestProjectGeneratorCreatesMicroserviceAssets(t *testing.T) {
 	}
 	assertFileContains(t, filepath.Join(project, "main.go"), "signal.NotifyContext")
 	assertFileContains(t, filepath.Join(project, "routes", "health.go"), `app.Get("/health/ready"`)
-	assertFileContains(t, filepath.Join(project, "Dockerfile"), "FROM golang:1.25-alpine AS build")
+	assertFileContains(t, filepath.Join(project, "Dockerfile"), "FROM golang:1.26-alpine AS build")
 }
 
 func TestProjectGeneratorRejectsUnknownArchitecture(t *testing.T) {
