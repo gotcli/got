@@ -2,6 +2,8 @@ module github.com/gotcli/got
 
 go 1.26.0
 
+toolchain go1.26.9
+
 require (
 	github.com/charmbracelet/huh v0.6.0
 	github.com/gotcli/blueprints v0.3.0
