@@ -3,15 +3,19 @@ package cmd
 import (
 	"os"
 
+	"github.com/gotcli/got/pkg/promtui"
 	"github.com/spf13/cobra"
 )
 
 type config struct {
-	cwd string
+	cwd            string
+	version        string
+	nonInteractive bool
 }
 
 func NewRootCommand(version string) *cobra.Command {
-	cfg := &config{}
+	cfg := &config{version: version}
+	var noInput bool
 	root := &cobra.Command{
 		Use:   "got",
 		Short: "Generate maintainable Go services",
@@ -44,10 +48,12 @@ Run a command with --help to see its workflow and examples.`,
 				return err
 			}
 			cfg.cwd = cwd
+			cfg.nonInteractive = noInput || !promtui.IsTerminal()
 			return nil
 		},
 	}
-	root.AddCommand(newInitCommand(cfg), newAPICommand(cfg), newAddCommand(cfg), newDoctorCommand(cfg, version), newGenerateCommand(cfg), newVersionCommand(version))
+	root.PersistentFlags().BoolVar(&noInput, "no-input", false, "never prompt; fail with the missing flags instead (automatic when stdin is not a terminal)")
+	root.AddCommand(newInitCommand(cfg), newAPICommand(cfg), newAddCommand(cfg), newDoctorCommand(cfg, version), newGenerateCommand(cfg), newRoutesCommand(cfg), newConfigCommand(cfg), newUpgradeCommand(cfg), newVersionCommand(version))
 	return root
 }
 

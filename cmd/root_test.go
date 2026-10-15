@@ -35,7 +35,10 @@ func TestCommandHelpIncludesWorkflowsAndExamples(t *testing.T) {
 		{args: []string{"add", "swagger", "--help"}, expected: []string{"OpenAPI 3.0", "/swagger/index.html", "APP_ENV is production"}},
 		{args: []string{"add", "service", "--help"}, expected: []string{"got-workspace.json", "got add service payment"}},
 		{args: []string{"doctor", "--help"}, expected: []string{"--project", "--connect", "--json", "Secret values are never printed"}},
-		{args: []string{"generate", "crud", "--help"}, expected: []string{"current project's database", "masked prompt", "workspace root", "commerce-platform/order-service", "--db-schema"}},
+		{args: []string{"generate", "crud", "--help"}, expected: []string{"current project's database", "masked prompt", "workspace root", "commerce-platform/services/order-service", "--db-schema", "--tables", "--dry-run"}},
+		{args: []string{"routes", "--help"}, expected: []string{"func main", "{dynamic}", "--json"}},
+		{args: []string{"config", "--help"}, expected: []string{"<PREFIX>_<KEY>", "never printed", "--json"}},
+		{args: []string{"upgrade", "--help"}, expected: []string{"--dry-run", "uncommitted Git changes", "manual action"}},
 	}
 	for _, test := range tests {
 		command := NewRootCommand("test")

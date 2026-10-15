@@ -8,6 +8,11 @@ import (
 	"golang.org/x/term"
 )
 
+// IsTerminal reports whether stdin is an interactive terminal that prompts can use.
+func IsTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
 type PromptUI interface {
 	AskForInput(title string, isRequired bool) (string, error)
 	AskForPassword(title string, isRequired bool) (string, error)

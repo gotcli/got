@@ -70,13 +70,13 @@ and the default extensions are .jpg, .jpeg, .png, and .pdf.`,
 		Use: "service [name]", Short: "Add a microservice to the current workspace",
 		Long: `Add an independently buildable microservice to a GOT workspace created by
 "got init workspace". The command reads got-workspace.json, generates the child
-service, and updates go.work, compose.yml, Makefile, and workspace README.`,
+service under services/, and updates go.work, deploy/compose.yml, and the workspace README.`,
 		Example: `  cd restaurant-platform
   got add service payment
   got add service notification-service`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := (generator.WorkspaceGenerator{Output: cmd.ErrOrStderr()}).AddService(cmd.Context(), cfg.cwd, args[0]); err != nil {
+			if err := (generator.WorkspaceGenerator{Output: cmd.ErrOrStderr(), Version: cfg.version}).AddService(cmd.Context(), cfg.cwd, args[0]); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "added service %s to workspace\n", args[0])

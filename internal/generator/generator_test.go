@@ -48,6 +48,8 @@ func TestProjectGeneratorCreatesProject(t *testing.T) {
 	assertFileContains(t, filepath.Join(parent, "orders", "pkg", "logger", "logger.go"), `"event", "database"`)
 	assertFileContains(t, filepath.Join(parent, "orders", "middlewares", "request_logger.go"), `"event", "http.inbound"`)
 	assertFileContains(t, filepath.Join(parent, "orders", "databases", "pg.go"), `logger.NewGORMLogger(viper.GetDuration("DB_SLOW_QUERY_THRESHOLD"))`)
+	// config.yml holds DB_PASSWORD; an indented pattern would not be ignored by git.
+	assertFileContains(t, filepath.Join(parent, "orders", ".gitignore"), "\n/config.yml\n")
 }
 
 func TestProjectGeneratorRejectsExistingDestination(t *testing.T) {
@@ -177,16 +179,21 @@ func TestAPIGeneratorGeneratesWorkingCRUDLayers(t *testing.T) {
 			{Name: "order_id", DataType: "integer", UDTName: "int4"},
 			{Name: "price", DataType: "numeric", UDTName: "numeric"},
 			{Name: "note", DataType: "text", UDTName: "text", Nullable: true},
+			{Name: "status", DataType: "USER-DEFINED", UDTName: "item_status", HasDefault: true, EnumValues: []string{"open", "closed"}},
+			{Name: "created_at", DataType: "timestamp with time zone", HasDefault: true},
 		},
 	}}}
 	if err := (APIGenerator{}).GenerateCRUD(project, database); err != nil {
 		t.Fatal(err)
 	}
 	assertFileContains(t, filepath.Join(project, "repositories", "order_items", "order_items.go"), "func (r *repository) Create")
-	assertFileContains(t, filepath.Join(project, "services", "order_items", "order_items.go"), "return s.repository.Update")
+	assertFileContains(t, filepath.Join(project, "services", "order_items", "order_items.go"), "request.Apply(&item)")
 	assertFileContains(t, filepath.Join(project, "handlers", "order_items", "order_items.go"), "func (h *handler) Delete")
-	assertFileContains(t, filepath.Join(project, "entities", "order_items", "order_items.go"), "Price   decimal.Decimal")
-	assertFileContains(t, filepath.Join(project, "entities", "order_items", "order_items.go"), "ID      int")
+	assertFileContains(t, filepath.Join(project, "entities", "order_items", "order_items.go"), "Price     decimal.Decimal")
+	assertFileContains(t, filepath.Join(project, "entities", "order_items", "order_items.go"), "ID        int")
+	// A column with a database default must not be overwritten by the Go zero value.
+	assertFileContains(t, filepath.Join(project, "entities", "order_items", "order_items.go"), `Status    *string`)
+	assertFileContains(t, filepath.Join(project, "entities", "order_items", "order_items.go"), `gorm:"column:status;default:(-)"`)
 	content, err := os.ReadFile(filepath.Join(project, "entities", "order_items", "order_items.go"))
 	if err != nil {
 		t.Fatal(err)
@@ -195,8 +202,26 @@ func TestAPIGeneratorGeneratesWorkingCRUDLayers(t *testing.T) {
 		t.Fatal("generated entity contains an invalid GORM default tag")
 	}
 	assertFileContains(t, filepath.Join(project, "routes", "order_items.go"), "group.Get(\"/:id\", h.Get)")
-	assertFileContains(t, filepath.Join(project, "handlers", "order_items", "order_items.go"), "response.Send(c, fiber.StatusOK, items)")
-	assertFileContains(t, filepath.Join(project, "services", "order_items", "order_items.go"), `logger.ServiceResult(ctx, "order_items", "list", started, items, err)`)
+	assertFileContains(t, filepath.Join(project, "routes", "order_items.go"), "group.Patch(\"/:id\", h.Update)")
+	assertFileContains(t, filepath.Join(project, "handlers", "order_items", "order_items.go"), "response.Send(c, fiber.StatusOK, page)")
+	assertFileContains(t, filepath.Join(project, "handlers", "order_items", "order_items.go"), "decoder.DisallowUnknownFields()")
+	assertFileContains(t, filepath.Join(project, "handlers", "order_items", "order_items.go"), "fiber.StatusUnprocessableEntity")
+	assertFileContains(t, filepath.Join(project, "repositories", "order_items", "order_items.go"), "Limit(limit).Offset(offset)")
+	assertFileContains(t, filepath.Join(project, "repositories", "order_items", "order_items.go"), "return gorm.ErrRecordNotFound")
+	assertFileContains(t, filepath.Join(project, "services", "order_items", "order_items.go"), `logger.ServiceResult(ctx, "order_items", "list", started, page, err)`)
+
+	schemaPath := filepath.Join(project, "schemas", "order_items", "order_items.go")
+	assertFileContains(t, schemaPath, `problems["order_id"] = "is required"`)
+	assertFileContains(t, schemaPath, `oneOf(*r.Status, "open", "closed")`)
+	schemaSource, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, unexpected := range []string{`json:"id"`, `json:"created_at"`, `problems["note"] = "is required"`, `problems["status"] = "is required"`} {
+		if strings.Contains(string(schemaSource), unexpected) {
+			t.Errorf("schema should not contain %s:\n%s", unexpected, schemaSource)
+		}
+	}
 }
 
 func TestCRUDPreflightPreventsPartialGeneration(t *testing.T) {

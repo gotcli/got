@@ -87,8 +87,8 @@ JWT_REFRESH_SECRET: ""
 func TestDiscoverDoctorWorkspace(t *testing.T) {
 	root := t.TempDir()
 	writeDoctorFile(t, filepath.Join(root, "got-workspace.json"), `{"services":["order-service","auth-service"]}`)
-	writeDoctorFile(t, filepath.Join(root, "order-service", "go.mod"), "module example.com/platform/order-service\n")
-	writeDoctorFile(t, filepath.Join(root, "auth-service", "go.mod"), "module example.com/platform/auth-service\n")
+	writeDoctorFile(t, filepath.Join(root, "services", "order-service", "go.mod"), "module example.com/platform/order-service\n")
+	writeDoctorFile(t, filepath.Join(root, "auth-service", "go.mod"), "module example.com/platform/auth-service\n") // legacy root layout
 
 	projects, workspace, err := discoverDoctorProjects(root)
 	if err != nil {

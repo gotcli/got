@@ -32,11 +32,15 @@ type passwordPrompter interface {
 type generateDependencies struct {
 	prompt    passwordPrompter
 	inspector crudInspector
+	// runner tidies go.mod after generation, adding imports such as
+	// shopspring/decimal. Nil skips the step.
+	runner generator.CommandRunner
 }
 
 func defaultGenerateDependencies() generateDependencies {
 	return generateDependencies{
 		prompt: promtui.NewPromptUI(),
+		runner: generator.ExecRunner{},
 		inspector: func(ctx context.Context, input crudConnection) (dbschema.Database, error) {
 			switch input.Driver {
 			case "pg":
@@ -76,6 +80,8 @@ values for one run. Sensitive passwords are never accepted as flags or saved.`,
 
 func newGenerateCRUDCommand(cfg *config, dependencies generateDependencies) *cobra.Command {
 	var host, database, user, schema string
+	var tables []string
+	var dryRun bool
 	var port uint16
 	command := &cobra.Command{
 		Use:   "crud",
@@ -84,8 +90,13 @@ func newGenerateCRUDCommand(cfg *config, dependencies generateDependencies) *cob
 
 GOT generates entity, repository, service, handler, and route layers for each
 supported table. PostgreSQL and SQL Server are supported. Inspection is
-read-only. The database password is requested through a masked prompt and is
-never accepted as a flag, printed, or written to the project.
+read-only. The database password is requested through a masked prompt, or read
+from GOT_DB_PASSWORD when no terminal is available. It is never accepted as a
+flag, printed, or written to the project.
+
+Use --tables to generate only selected tables, for example tables added after
+an earlier run. Use --dry-run to inspect the schema and list the files that
+would be created without writing anything.
 
 For a microservice workspace, run this command inside each child service, not
 from the workspace root. Each service should generate CRUD only from the
@@ -97,8 +108,12 @@ database or schema it owns.`,
   # Override selected config values for this run
   got generate crud --db-host localhost --db-schema public
 
+  # Add CRUD for new tables only, previewing first
+  got generate crud --tables invoices,payments --dry-run
+  got generate crud --tables invoices,payments
+
   # Workspace: enter one child service first
-  cd commerce-platform/order-service
+  cd commerce-platform/services/order-service
   got generate crud --db-name commerce --db-schema ordering
 
   cd ../payment-service
@@ -127,7 +142,7 @@ database or schema it owns.`,
 			if err := validateCRUDConnection(connection); err != nil {
 				return err
 			}
-			connection.Password, err = dependencies.prompt.AskForPassword("Database password", true)
+			connection.Password, err = readDatabasePassword(cfg, dependencies.prompt)
 			if err != nil {
 				return err
 			}
@@ -143,8 +158,29 @@ database or schema it owns.`,
 				return fmt.Errorf("schema %q contains no tables", connection.Schema)
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(), "[step] discovered %d database objects\n", len(inspected.Tables))
+			inspected, err = selectTables(inspected, tables)
+			if err != nil {
+				return err
+			}
+			if dryRun {
+				planned, err := (generator.APIGenerator{}).PlanCRUD(cfg.cwd, inspected)
+				if err != nil {
+					return crudGenerationError(err)
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "dry run: would generate CRUD for %d tables and write:\n", len(inspected.Tables))
+				for _, path := range planned {
+					fmt.Fprintf(cmd.OutOrStdout(), "  %s\n", path)
+				}
+				return nil
+			}
 			if err := (generator.APIGenerator{}).GenerateCRUD(cfg.cwd, inspected); err != nil {
-				return fmt.Errorf("generate CRUD: %w", err)
+				return crudGenerationError(err)
+			}
+			if dependencies.runner != nil {
+				fmt.Fprintln(cmd.ErrOrStderr(), "[step] tidying Go module dependencies")
+				if err := dependencies.runner.Run(cmd.Context(), cfg.cwd, "go", "mod", "tidy"); err != nil {
+					return fmt.Errorf("CRUD files were generated, but go mod tidy failed (run it manually): %w", err)
+				}
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "generated CRUD for %d database objects\n", len(inspected.Tables))
 			return nil
@@ -155,7 +191,51 @@ database or schema it owns.`,
 	command.Flags().StringVar(&database, "db-name", "", "override the database name from config.yml")
 	command.Flags().StringVar(&user, "db-user", "", "override the database username from config.yml")
 	command.Flags().StringVar(&schema, "db-schema", "", "database schema (default: public for PostgreSQL, dbo for SQL Server)")
+	command.Flags().StringSliceVar(&tables, "tables", nil, "comma-separated tables to generate (default: every table in the schema)")
+	command.Flags().BoolVar(&dryRun, "dry-run", false, "list the files that would be generated without writing them")
 	return command
+}
+
+// selectTables keeps only the requested tables, matched case-insensitively.
+func selectTables(database dbschema.Database, names []string) (dbschema.Database, error) {
+	if len(names) == 0 {
+		return database, nil
+	}
+	byName := make(map[string]dbschema.Table, len(database.Tables))
+	available := make([]string, 0, len(database.Tables))
+	for _, table := range database.Tables {
+		byName[strings.ToLower(table.Name)] = table
+		available = append(available, table.Name)
+	}
+	selected := database
+	selected.Tables = nil
+	seen := make(map[string]bool)
+	var unknown []string
+	for _, name := range names {
+		key := strings.ToLower(strings.TrimSpace(name))
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		table, ok := byName[key]
+		if !ok {
+			unknown = append(unknown, name)
+			continue
+		}
+		selected.Tables = append(selected.Tables, table)
+	}
+	if len(unknown) > 0 {
+		sort.Strings(available)
+		return dbschema.Database{}, fmt.Errorf("tables not found in schema %q: %s (available: %s)", database.Schema, strings.Join(unknown, ", "), strings.Join(available, ", "))
+	}
+	return selected, nil
+}
+
+func crudGenerationError(err error) error {
+	if message := err.Error(); strings.Contains(message, "refusing to overwrite") || strings.Contains(message, "is already registered") {
+		return fmt.Errorf("generate CRUD: %w\nhint: CRUD already exists for some tables; use --tables to generate only new ones", err)
+	}
+	return fmt.Errorf("generate CRUD: %w", err)
 }
 
 func loadProjectCRUDConnection(projectPath string) (crudConnection, error) {

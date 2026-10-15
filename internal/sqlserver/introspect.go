@@ -42,7 +42,7 @@ func Introspect(ctx context.Context, input Config) (dbschema.Database, error) {
 
 	rows, err := db.QueryContext(ctx, `
 		SELECT t.name, c.name, typ.name, c.is_nullable,
-		       CASE WHEN dc.object_id IS NULL THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END
+		       CASE WHEN dc.object_id IS NULL AND c.is_identity = 0 THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END
 		FROM sys.tables t
 		JOIN sys.schemas s ON s.schema_id = t.schema_id
 		JOIN sys.columns c ON c.object_id = t.object_id

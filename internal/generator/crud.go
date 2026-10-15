@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -13,6 +14,7 @@ import (
 
 type crudData struct {
 	Module        string
+	LoggerModule  string
 	Package       string
 	Table         string
 	Schema        string
@@ -23,54 +25,26 @@ type crudData struct {
 	Fields        string
 	Imports       string
 	ParseID       string
+	RequestFields []crudField
+	SchemaImports string
+}
+
+// crudField is a client-writable column exposed through the request DTOs.
+type crudField struct {
+	Name          string
+	JSON          string
+	Type          string
+	EntityPointer bool
+	Required      bool
+	String        bool
+	EnumList      string
+	EnumMessage   string
 }
 
 func (APIGenerator) GenerateCRUD(projectPath string, database dbschema.Database) error {
-	module, err := readModuleName(filepath.Join(projectPath, "go.mod"))
+	items, err := prepareCRUD(projectPath, database)
 	if err != nil {
 		return err
-	}
-	packages := make(map[string]string)
-	entities := make(map[string]string)
-	items := make([]crudData, 0, len(database.Tables))
-	for _, table := range database.Tables {
-		if len(table.PrimaryKey) != 1 {
-			return fmt.Errorf("table %s must have exactly one primary key; found %d", table.Name, len(table.PrimaryKey))
-		}
-		packageName := toSnakeCase(table.Name)
-		if err := validateName("generated package name", packageName); err != nil {
-			return err
-		}
-		if previous, exists := packages[packageName]; exists {
-			return fmt.Errorf("tables %q and %q map to the same Go package %q", previous, table.Name, packageName)
-		}
-		packages[packageName] = table.Name
-		primaryColumn, ok := findColumn(table, table.PrimaryKey[0])
-		if !ok {
-			return fmt.Errorf("primary key column %s.%s not found", table.Name, table.PrimaryKey[0])
-		}
-		entityName := singularTypeName(packageName)
-		if previous, exists := entities[entityName]; exists {
-			return fmt.Errorf("tables %q and %q map to the same Go entity %q", previous, table.Name, entityName)
-		}
-		entities[entityName] = table.Name
-		primaryType := baseGoType(primaryColumn)
-		if primaryType != "int" && primaryType != "int64" {
-			return fmt.Errorf("table %s primary key must be an integer; found %s", table.Name, primaryColumn.DataType)
-		}
-		fields, imports := entityFields(table)
-		data := crudData{
-			Module: module, Package: packageName, Table: table.Name, Schema: database.Schema,
-			Entity: entityName, PrimaryKey: goFieldName(primaryColumn.Name), PrimaryColumn: primaryColumn.Name,
-			PrimaryType: primaryType, Fields: fields, Imports: imports,
-			ParseID: parseID(primaryType),
-		}
-		items = append(items, data)
-	}
-	for _, data := range items {
-		if err := preflightCRUDTable(projectPath, data); err != nil {
-			return err
-		}
 	}
 	for _, data := range items {
 		if err := generateCRUDTable(projectPath, data); err != nil {
@@ -78,6 +52,78 @@ func (APIGenerator) GenerateCRUD(projectPath string, database dbschema.Database)
 		}
 	}
 	return nil
+}
+
+// PlanCRUD runs every validation and preflight check of GenerateCRUD without
+// writing, and returns the project-relative files it would create plus the
+// route registry it would edit.
+func (APIGenerator) PlanCRUD(projectPath string, database dbschema.Database) ([]string, error) {
+	items, err := prepareCRUD(projectPath, database)
+	if err != nil {
+		return nil, err
+	}
+	var planned []string
+	for _, data := range items {
+		for path := range crudFiles(data) {
+			planned = append(planned, path)
+		}
+	}
+	sort.Strings(planned)
+	if len(items) > 0 {
+		planned = append(planned, filepath.Join("routes", "root.go")+" (register routes)")
+	}
+	return planned, nil
+}
+
+func prepareCRUD(projectPath string, database dbschema.Database) ([]crudData, error) {
+	module, err := readModuleName(filepath.Join(projectPath, "go.mod"))
+	if err != nil {
+		return nil, err
+	}
+	packages := make(map[string]string)
+	entities := make(map[string]string)
+	items := make([]crudData, 0, len(database.Tables))
+	for _, table := range database.Tables {
+		if len(table.PrimaryKey) != 1 {
+			return nil, fmt.Errorf("table %s must have exactly one primary key; found %d", table.Name, len(table.PrimaryKey))
+		}
+		packageName := toSnakeCase(table.Name)
+		if err := validateName("generated package name", packageName); err != nil {
+			return nil, err
+		}
+		if previous, exists := packages[packageName]; exists {
+			return nil, fmt.Errorf("tables %q and %q map to the same Go package %q", previous, table.Name, packageName)
+		}
+		packages[packageName] = table.Name
+		primaryColumn, ok := findColumn(table, table.PrimaryKey[0])
+		if !ok {
+			return nil, fmt.Errorf("primary key column %s.%s not found", table.Name, table.PrimaryKey[0])
+		}
+		entityName := singularTypeName(packageName)
+		if previous, exists := entities[entityName]; exists {
+			return nil, fmt.Errorf("tables %q and %q map to the same Go entity %q", previous, table.Name, entityName)
+		}
+		entities[entityName] = table.Name
+		primaryType := baseGoType(primaryColumn)
+		if primaryType != "int" && primaryType != "int64" {
+			return nil, fmt.Errorf("table %s primary key must be an integer; found %s", table.Name, primaryColumn.DataType)
+		}
+		fields, imports := entityFields(table)
+		requestFields, schemaImports := requestFields(table, module, packageName)
+		data := crudData{
+			Module: module, LoggerModule: loggerModuleForProject(projectPath, module), Package: packageName, Table: table.Name, Schema: database.Schema,
+			Entity: entityName, PrimaryKey: goFieldName(primaryColumn.Name), PrimaryColumn: primaryColumn.Name,
+			PrimaryType: primaryType, Fields: fields, Imports: imports,
+			ParseID: parseID(primaryType), RequestFields: requestFields, SchemaImports: schemaImports,
+		}
+		items = append(items, data)
+	}
+	for _, data := range items {
+		if err := preflightCRUDTable(projectPath, data); err != nil {
+			return nil, err
+		}
+	}
+	return items, nil
 }
 
 func preflightCRUDTable(projectPath string, data crudData) error {
@@ -121,6 +167,7 @@ func generateCRUDTable(projectPath string, data crudData) error {
 func crudFiles(data crudData) map[string]string {
 	return map[string]string{
 		filepath.Join("entities", data.Package, data.Package+".go"):     crudEntity,
+		filepath.Join("schemas", data.Package, data.Package+".go"):      crudSchema,
 		filepath.Join("repositories", data.Package, "interface.go"):     crudRepositoryInterface,
 		filepath.Join("repositories", data.Package, data.Package+".go"): crudRepository,
 		filepath.Join("services", data.Package, "interface.go"):         crudServiceInterface,
@@ -148,12 +195,17 @@ func entityFields(table dbschema.Table) (string, string) {
 		if requiredImport != "" {
 			imports[requiredImport] = true
 		}
-		if column.Nullable {
+		primary := contains(table.PrimaryKey, column.Name)
+		if entityFieldIsPointer(column, primary) {
 			goType = "*" + goType
 		}
 		gormTags := []string{"column:" + column.Name}
-		if contains(table.PrimaryKey, column.Name) {
+		if primary {
 			gormTags = append(gormTags, "primaryKey")
+		} else if column.HasDefault {
+			// A nil pointer is omitted from INSERT so the database default applies,
+			// while an explicit value such as false is still written.
+			gormTags = append(gormTags, "default:(-)")
 		}
 		fmt.Fprintf(&fields, "\t%s %s `json:\"%s\" gorm:\"%s\"`\n", goFieldName(column.Name), goType, column.Name, strings.Join(gormTags, ";"))
 	}
@@ -171,6 +223,61 @@ func entityFields(table dbschema.Table) (string, string) {
 		importBlock = "import (\n" + strings.Join(quoted, "\n") + "\n)\n"
 	}
 	return fields.String(), importBlock
+}
+
+// entityFieldIsPointer reports whether the entity field must distinguish "not
+// set" from the Go zero value: nullable columns and non-key columns with a
+// database default.
+func entityFieldIsPointer(column dbschema.Column, primary bool) bool {
+	return column.Nullable || (column.HasDefault && !primary)
+}
+
+// serverManagedColumns are maintained by the database or GORM and are never
+// accepted from clients.
+var serverManagedColumns = map[string]bool{"created_at": true, "updated_at": true, "deleted_at": true}
+
+func requestFields(table dbschema.Table, module, packageName string) ([]crudField, string) {
+	imports := map[string]bool{"strconv": true, "strings": true, module + "/entities/" + packageName: true}
+	var fields []crudField
+	for _, column := range table.Columns {
+		primary := contains(table.PrimaryKey, column.Name)
+		if (primary && column.HasDefault) || serverManagedColumns[strings.ToLower(column.Name)] {
+			continue
+		}
+		goType, requiredImport := columnGoType(column)
+		if requiredImport != "" {
+			imports[requiredImport] = true
+		}
+		field := crudField{
+			Name: goFieldName(column.Name), JSON: column.Name, Type: goType,
+			EntityPointer: entityFieldIsPointer(column, primary),
+			Required:      !column.Nullable && !column.HasDefault,
+			String:        goType == "string",
+		}
+		if len(column.EnumValues) > 0 && field.String {
+			quoted := make([]string, len(column.EnumValues))
+			for i, value := range column.EnumValues {
+				quoted[i] = strconv.Quote(value)
+			}
+			field.EnumList = strings.Join(quoted, ", ")
+			field.EnumMessage = strconv.Quote("must be one of: " + strings.Join(column.EnumValues, ", "))
+		}
+		fields = append(fields, field)
+	}
+	keys := make([]string, 0, len(imports))
+	for value := range imports {
+		keys = append(keys, value)
+	}
+	sort.Strings(keys)
+	quoted := make([]string, len(keys))
+	for i, value := range keys {
+		if strings.HasSuffix(value, "/entities/"+packageName) {
+			quoted[i] = fmt.Sprintf("\tentity %q", value)
+			continue
+		}
+		quoted[i] = fmt.Sprintf("\t%q", value)
+	}
+	return fields, strings.Join(quoted, "\n")
 }
 
 func columnGoType(column dbschema.Column) (string, string) {
@@ -287,6 +394,146 @@ type {{ .Entity }} struct {
 func ({{ .Entity }}) TableName() string { return "{{ .Schema }}.{{ .Table }}" }
 `
 
+const crudSchema = `package {{ .Package }}
+
+import (
+{{ .SchemaImports }}
+)
+
+const (
+	DefaultLimit = 20
+	MaxLimit     = 100
+)
+
+type ListQuery struct {
+	Limit  int
+	Offset int
+}
+
+// ParseListQuery reads ?limit= and ?offset=. Limit defaults to DefaultLimit and
+// is capped at MaxLimit so a list request can never load the whole table.
+func ParseListQuery(limit, offset string) (ListQuery, map[string]string) {
+	query := ListQuery{Limit: DefaultLimit}
+	problems := map[string]string{}
+	if value := strings.TrimSpace(limit); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 {
+			problems["limit"] = "must be a positive integer"
+		} else {
+			query.Limit = min(parsed, MaxLimit)
+		}
+	}
+	if value := strings.TrimSpace(offset); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 0 {
+			problems["offset"] = "must be a non-negative integer"
+		} else {
+			query.Offset = parsed
+		}
+	}
+	return query, problems
+}
+
+type {{ .Entity }}Page struct {
+	Items  []entity.{{ .Entity }} ` + "`json:\"items\"`" + `
+	Total  int64 ` + "`json:\"total\"`" + `
+	Limit  int ` + "`json:\"limit\"`" + `
+	Offset int ` + "`json:\"offset\"`" + `
+}
+
+// Create{{ .Entity }}Request lists the columns a client may set. Generated keys
+// and created_at/updated_at/deleted_at are managed by the server.
+type Create{{ .Entity }}Request struct {
+{{- range .RequestFields }}
+	{{ .Name }} *{{ .Type }} ` + "`json:\"{{ .JSON }}\"`" + `
+{{- end }}
+}
+
+func (r Create{{ .Entity }}Request) Validate() map[string]string {
+	problems := map[string]string{}
+{{- range .RequestFields }}
+{{- if .Required }}
+	if r.{{ .Name }} == nil {
+		problems["{{ .JSON }}"] = "is required"
+	}
+{{- end }}
+{{- if .String }}
+{{- if .Required }}
+	if r.{{ .Name }} != nil && strings.TrimSpace(*r.{{ .Name }}) == "" {
+		problems["{{ .JSON }}"] = "must not be blank"
+	}
+{{- end }}
+{{- end }}
+{{- if .EnumList }}
+	if r.{{ .Name }} != nil && !oneOf(*r.{{ .Name }}, {{ .EnumList }}) {
+		problems["{{ .JSON }}"] = {{ .EnumMessage }}
+	}
+{{- end }}
+{{- end }}
+	return problems
+}
+
+func (r Create{{ .Entity }}Request) ToEntity() entity.{{ .Entity }} {
+	var item entity.{{ .Entity }}
+{{- range .RequestFields }}
+{{- if .EntityPointer }}
+	item.{{ .Name }} = r.{{ .Name }}
+{{- else }}
+	if r.{{ .Name }} != nil {
+		item.{{ .Name }} = *r.{{ .Name }}
+	}
+{{- end }}
+{{- end }}
+	return item
+}
+
+// Update{{ .Entity }}Request is a partial update: omitted fields keep their
+// stored value.
+type Update{{ .Entity }}Request struct {
+{{- range .RequestFields }}
+	{{ .Name }} *{{ .Type }} ` + "`json:\"{{ .JSON }}\"`" + `
+{{- end }}
+}
+
+func (r Update{{ .Entity }}Request) Validate() map[string]string {
+	problems := map[string]string{}
+{{- range .RequestFields }}
+{{- if and .String .Required }}
+	if r.{{ .Name }} != nil && strings.TrimSpace(*r.{{ .Name }}) == "" {
+		problems["{{ .JSON }}"] = "must not be blank"
+	}
+{{- end }}
+{{- if .EnumList }}
+	if r.{{ .Name }} != nil && !oneOf(*r.{{ .Name }}, {{ .EnumList }}) {
+		problems["{{ .JSON }}"] = {{ .EnumMessage }}
+	}
+{{- end }}
+{{- end }}
+	return problems
+}
+
+func (r Update{{ .Entity }}Request) Apply(item *entity.{{ .Entity }}) {
+{{- range .RequestFields }}
+	if r.{{ .Name }} != nil {
+{{- if .EntityPointer }}
+		item.{{ .Name }} = r.{{ .Name }}
+{{- else }}
+		item.{{ .Name }} = *r.{{ .Name }}
+{{- end }}
+	}
+{{- end }}
+}
+
+func oneOf(value string, allowed ...string) bool {
+	for _, candidate := range allowed {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
+}
+`
+
 const crudRepositoryInterface = `package {{ .Package }}
 
 import (
@@ -295,7 +542,7 @@ import (
 )
 
 type {{ .Entity }}Repository interface {
-	List(ctx context.Context) ([]entity.{{ .Entity }}, error)
+	List(ctx context.Context, limit, offset int) ([]entity.{{ .Entity }}, int64, error)
 	Get(ctx context.Context, id {{ .PrimaryType }}) (entity.{{ .Entity }}, error)
 	Create(ctx context.Context, item *entity.{{ .Entity }}) error
 	Update(ctx context.Context, item *entity.{{ .Entity }}) error
@@ -309,21 +556,28 @@ import (
 	"context"
 	entity "{{ .Module }}/entities/{{ .Package }}"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type repository struct { db *gorm.DB }
 
 func New{{ .Entity }}Repository(db *gorm.DB) {{ .Entity }}Repository { return &repository{db: db} }
 
-func (r *repository) List(ctx context.Context) ([]entity.{{ .Entity }}, error) {
-	var items []entity.{{ .Entity }}
-	err := r.db.WithContext(ctx).Find(&items).Error
-	return items, err
+func (r *repository) List(ctx context.Context, limit, offset int) ([]entity.{{ .Entity }}, int64, error) {
+	var total int64
+	if err := r.db.WithContext(ctx).Model(&entity.{{ .Entity }}{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	items := []entity.{{ .Entity }}{}
+	err := r.db.WithContext(ctx).
+		Order(clause.OrderByColumn{Column: clause.Column{Name: "{{ .PrimaryColumn }}"}}).
+		Limit(limit).Offset(offset).Find(&items).Error
+	return items, total, err
 }
 
 func (r *repository) Get(ctx context.Context, id {{ .PrimaryType }}) (entity.{{ .Entity }}, error) {
 	var item entity.{{ .Entity }}
-	err := r.db.WithContext(ctx).First(&item, "{{ .PrimaryColumn }} = ?", id).Error
+	err := r.db.WithContext(ctx).First(&item, id).Error
 	return item, err
 }
 
@@ -335,8 +589,16 @@ func (r *repository) Update(ctx context.Context, item *entity.{{ .Entity }}) err
 	return r.db.WithContext(ctx).Save(item).Error
 }
 
+// Delete returns gorm.ErrRecordNotFound when no row has the given id.
 func (r *repository) Delete(ctx context.Context, id {{ .PrimaryType }}) error {
-	return r.db.WithContext(ctx).Delete(&entity.{{ .Entity }}{}, "{{ .PrimaryColumn }} = ?", id).Error
+	result := r.db.WithContext(ctx).Delete(&entity.{{ .Entity }}{}, id)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 `
 
@@ -345,13 +607,14 @@ const crudServiceInterface = `package {{ .Package }}
 import (
 	"context"
 	entity "{{ .Module }}/entities/{{ .Package }}"
+	schema "{{ .Module }}/schemas/{{ .Package }}"
 )
 
 type {{ .Entity }}Service interface {
-	List(ctx context.Context) ([]entity.{{ .Entity }}, error)
+	List(ctx context.Context, query schema.ListQuery) (schema.{{ .Entity }}Page, error)
 	Get(ctx context.Context, id {{ .PrimaryType }}) (entity.{{ .Entity }}, error)
-	Create(ctx context.Context, item *entity.{{ .Entity }}) error
-	Update(ctx context.Context, item *entity.{{ .Entity }}) error
+	Create(ctx context.Context, request schema.Create{{ .Entity }}Request) (entity.{{ .Entity }}, error)
+	Update(ctx context.Context, id {{ .PrimaryType }}, request schema.Update{{ .Entity }}Request) (entity.{{ .Entity }}, error)
 	Delete(ctx context.Context, id {{ .PrimaryType }}) error
 }
 `
@@ -360,11 +623,11 @@ const crudService = `package {{ .Package }}
 
 import (
 	"context"
-	"errors"
 	"time"
 	entity "{{ .Module }}/entities/{{ .Package }}"
-	"{{ .Module }}/pkg/logger"
+	"{{ .LoggerModule }}"
 	repository "{{ .Module }}/repositories/{{ .Package }}"
+	schema "{{ .Module }}/schemas/{{ .Package }}"
 )
 
 type service struct { repository repository.{{ .Entity }}Repository }
@@ -372,25 +635,47 @@ type service struct { repository repository.{{ .Entity }}Repository }
 func New{{ .Entity }}Service(repository repository.{{ .Entity }}Repository) {{ .Entity }}Service {
 	return &service{repository: repository}
 }
-func (s *service) List(ctx context.Context) (items []entity.{{ .Entity }}, err error) {
-	started:=time.Now(); defer func(){ logger.ServiceResult(ctx,"{{ .Package }}","list",started,items,err) }()
-	return s.repository.List(ctx)
+
+func (s *service) List(ctx context.Context, query schema.ListQuery) (page schema.{{ .Entity }}Page, err error) {
+	started := time.Now()
+	defer func() { logger.ServiceResult(ctx, "{{ .Package }}", "list", started, page, err) }()
+	items, total, err := s.repository.List(ctx, query.Limit, query.Offset)
+	if err != nil {
+		return page, err
+	}
+	return schema.{{ .Entity }}Page{Items: items, Total: total, Limit: query.Limit, Offset: query.Offset}, nil
 }
+
 func (s *service) Get(ctx context.Context, id {{ .PrimaryType }}) (item entity.{{ .Entity }}, err error) {
-	started:=time.Now(); defer func(){ logger.ServiceResult(ctx,"{{ .Package }}","get",started,item,err) }()
-	return s.repository.Get(ctx,id)
+	started := time.Now()
+	defer func() { logger.ServiceResult(ctx, "{{ .Package }}", "get", started, item, err) }()
+	return s.repository.Get(ctx, id)
 }
-func (s *service) Create(ctx context.Context, item *entity.{{ .Entity }}) (err error) {
-	started:=time.Now(); defer func(){ logger.ServiceResult(ctx,"{{ .Package }}","create",started,item,err) }()
-	if item == nil { return errors.New("item is required") }; return s.repository.Create(ctx,item)
+
+func (s *service) Create(ctx context.Context, request schema.Create{{ .Entity }}Request) (item entity.{{ .Entity }}, err error) {
+	started := time.Now()
+	defer func() { logger.ServiceResult(ctx, "{{ .Package }}", "create", started, item, err) }()
+	item = request.ToEntity()
+	err = s.repository.Create(ctx, &item)
+	return item, err
 }
-func (s *service) Update(ctx context.Context, item *entity.{{ .Entity }}) (err error) {
-	started:=time.Now(); defer func(){ logger.ServiceResult(ctx,"{{ .Package }}","update",started,item,err) }()
-	if item == nil { return errors.New("item is required") }; return s.repository.Update(ctx,item)
+
+func (s *service) Update(ctx context.Context, id {{ .PrimaryType }}, request schema.Update{{ .Entity }}Request) (item entity.{{ .Entity }}, err error) {
+	started := time.Now()
+	defer func() { logger.ServiceResult(ctx, "{{ .Package }}", "update", started, item, err) }()
+	item, err = s.repository.Get(ctx, id)
+	if err != nil {
+		return item, err
+	}
+	request.Apply(&item)
+	err = s.repository.Update(ctx, &item)
+	return item, err
 }
+
 func (s *service) Delete(ctx context.Context, id {{ .PrimaryType }}) (err error) {
-	started:=time.Now(); defer func(){ logger.ServiceResult(ctx,"{{ .Package }}","delete",started,nil,err) }()
-	return s.repository.Delete(ctx,id)
+	started := time.Now()
+	defer func() { logger.ServiceResult(ctx, "{{ .Package }}", "delete", started, nil, err) }()
+	return s.repository.Delete(ctx, id)
 }
 `
 
@@ -410,48 +695,105 @@ type {{ .Entity }}Handler interface {
 const crudHandler = `package {{ .Package }}
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"strconv"
-	entity "{{ .Module }}/entities/{{ .Package }}"
 	"{{ .Module }}/pkg/response"
+	schema "{{ .Module }}/schemas/{{ .Package }}"
 	service "{{ .Module }}/services/{{ .Package }}"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 )
 
 type handler struct { service service.{{ .Entity }}Service }
+
 func New{{ .Entity }}Handler(service service.{{ .Entity }}Service) {{ .Entity }}Handler { return &handler{service: service} }
 
+// List returns one page: GET /?limit=20&offset=0.
 func (h *handler) List(c *fiber.Ctx) error {
-	items, err := h.service.List(c.UserContext())
-	if err != nil { return err }
-	return response.Send(c, fiber.StatusOK, items)
+	query, problems := schema.ParseListQuery(c.Query("limit"), c.Query("offset"))
+	if len(problems) > 0 {
+		return response.SendMessage(c, fiber.StatusBadRequest, "invalid query parameters", problems)
+	}
+	page, err := h.service.List(c.UserContext(), query)
+	if err != nil {
+		return err
+	}
+	return response.Send(c, fiber.StatusOK, page)
 }
+
 func (h *handler) Get(c *fiber.Ctx) error {
 	{{ .ParseID }}
 	item, err := h.service.Get(c.UserContext(), id)
-	if errors.Is(err, gorm.ErrRecordNotFound) { return fiber.ErrNotFound }
-	if err != nil { return err }
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return fiber.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
 	return response.Send(c, fiber.StatusOK, item)
 }
+
 func (h *handler) Create(c *fiber.Ctx) error {
-	var item entity.{{ .Entity }}
-	if err := c.BodyParser(&item); err != nil { return fiber.NewError(fiber.StatusBadRequest, "invalid request body") }
-	if err := h.service.Create(c.UserContext(), &item); err != nil { return err }
+	var request schema.Create{{ .Entity }}Request
+	if err := decodeBody(c, &request); err != nil {
+		return err
+	}
+	if problems := request.Validate(); len(problems) > 0 {
+		return response.SendMessage(c, fiber.StatusUnprocessableEntity, "validation failed", problems)
+	}
+	item, err := h.service.Create(c.UserContext(), request)
+	if err != nil {
+		return err
+	}
 	return response.Send(c, fiber.StatusCreated, item)
 }
+
+// Update applies a partial update; it serves both PUT and PATCH.
 func (h *handler) Update(c *fiber.Ctx) error {
 	{{ .ParseID }}
-	var item entity.{{ .Entity }}
-	if err := c.BodyParser(&item); err != nil { return fiber.NewError(fiber.StatusBadRequest, "invalid request body") }
-	item.{{ .PrimaryKey }} = id
-	if err := h.service.Update(c.UserContext(), &item); err != nil { return err }
+	var request schema.Update{{ .Entity }}Request
+	if err := decodeBody(c, &request); err != nil {
+		return err
+	}
+	if problems := request.Validate(); len(problems) > 0 {
+		return response.SendMessage(c, fiber.StatusUnprocessableEntity, "validation failed", problems)
+	}
+	item, err := h.service.Update(c.UserContext(), id, request)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return fiber.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
 	return response.Send(c, fiber.StatusOK, item)
 }
+
 func (h *handler) Delete(c *fiber.Ctx) error {
 	{{ .ParseID }}
-	if err := h.service.Delete(c.UserContext(), id); err != nil { return err }
-	return response.Send(c, fiber.StatusOK, nil)
+	err = h.service.Delete(c.UserContext(), id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return fiber.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+// decodeBody rejects unknown fields so typos and server-managed columns such as
+// the primary key fail loudly instead of being silently ignored.
+func decodeBody(c *fiber.Ctx, target any) error {
+	if len(bytes.TrimSpace(c.Body())) == 0 {
+		return fiber.NewError(fiber.StatusBadRequest, "request body is required")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(c.Body()))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request body: "+err.Error())
+	}
+	return nil
 }
 `
 
@@ -474,6 +816,7 @@ func Register{{ .Entity }}Routes(db *gorm.DB, route fiber.Router) {
 	group.Get("/:id", h.Get)
 	group.Post("/", h.Create)
 	group.Put("/:id", h.Update)
+	group.Patch("/:id", h.Update)
 	group.Delete("/:id", h.Delete)
 }
 `

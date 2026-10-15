@@ -45,6 +45,8 @@ func (ExecRunner) Run(ctx context.Context, dir, name string, args ...string) err
 type ProjectGenerator struct {
 	Runner CommandRunner
 	Output io.Writer
+	// Version is the GOT version recorded in the generated project manifest.
+	Version string
 }
 
 func (g ProjectGenerator) logStep(message string, args ...any) {
@@ -115,7 +117,7 @@ func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) 
 		DBHost: options.DBHost, DBPort: options.DBPort, DatabaseName: options.DBName, DBUser: options.DBUser,
 	}
 	files := map[string]string{
-		".gitignore":                    blueprints.GitIgnore,
+		".gitignore":                    trimLineIndent(blueprints.GitIgnore),
 		"config.yml":                    blueprints.ConfigYml,
 		"configs/viper.go":              blueprints.ConfigViper,
 		"pkg/logger/logger.go":          blueprints.StructuredLogger,
@@ -145,6 +147,15 @@ func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) 
 		if err := writeNewFile(filepath.Join(projectPath, relativePath), content); err != nil {
 			return err
 		}
+	}
+	manifest, err := EncodeProjectManifest(ProjectManifest{
+		GOTVersion: g.Version, Module: options.Module, Architecture: options.Architecture, Database: options.Database,
+	})
+	if err != nil {
+		return err
+	}
+	if err := writeNewFile(filepath.Join(projectPath, ProjectManifestName), manifest); err != nil {
+		return err
 	}
 
 	runner := g.Runner

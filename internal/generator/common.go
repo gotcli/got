@@ -48,6 +48,17 @@ func typeName(name string) string {
 	return strings.Join(parts, "")
 }
 
+// trimLineIndent removes leading whitespace from every line. Git treats leading
+// whitespace in .gitignore as part of the pattern, so indented blueprint lines
+// such as "\t/config.yml" would never match.
+func trimLineIndent(source string) string {
+	lines := strings.Split(source, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimLeft(line, " \t")
+	}
+	return strings.Join(lines, "\n")
+}
+
 func render(name, source string, data templateData) ([]byte, error) {
 	return renderAny(name, source, data)
 }

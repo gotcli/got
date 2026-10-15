@@ -1,0 +1,26 @@
+package routes
+
+import (
+	"context"
+	"time"
+
+	"example.com/shop/pkg/response"
+	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
+)
+
+func RegisterHealthRoutes(db *gorm.DB, app *fiber.App) {
+	app.Get("/health/live", func(c *fiber.Ctx) error { return response.Send(c, fiber.StatusOK, map[string]string{"state": "alive"}) })
+	app.Get("/health/ready", func(c *fiber.Ctx) error {
+		sqlDB, err := db.DB()
+		if err != nil {
+			return fiber.NewError(fiber.StatusServiceUnavailable, "database unavailable")
+		}
+		ctx, cancel := context.WithTimeout(c.UserContext(), 2*time.Second)
+		defer cancel()
+		if err := sqlDB.PingContext(ctx); err != nil {
+			return fiber.NewError(fiber.StatusServiceUnavailable, "database unavailable")
+		}
+		return response.Send(c, fiber.StatusOK, map[string]string{"state": "ready"})
+	})
+}

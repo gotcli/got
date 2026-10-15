@@ -260,7 +260,11 @@ func discoverDoctorProjects(cwd string) ([]doctorProject, bool, error) {
 		}
 		projects := make([]doctorProject, 0, len(manifest.Services))
 		for _, service := range manifest.Services {
-			path := filepath.Join(cwd, service)
+			path := filepath.Join(cwd, "services", service)
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				// Workspaces created before the services/ layout keep services at the root.
+				path = filepath.Join(cwd, service)
+			}
 			module, err := readModuleName(filepath.Join(path, "go.mod"))
 			if err != nil {
 				return nil, true, fmt.Errorf("%s: %w", service, err)
@@ -324,10 +328,18 @@ func checkServiceProject(ctx context.Context, project doctorProject, connect boo
 }
 
 func readSimpleYAML(path string) (map[string]string, error) {
+	_, values, err := readOrderedYAML(path)
+	return values, err
+}
+
+// readOrderedYAML reads the flat key: value config.yml that GOT generates and
+// also returns the keys in file order.
+func readOrderedYAML(path string) ([]string, map[string]string, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read config.yml: %w", err)
+		return nil, nil, fmt.Errorf("read config.yml: %w", err)
 	}
+	var keys []string
 	values := make(map[string]string)
 	for _, line := range strings.Split(string(content), "\n") {
 		line = strings.TrimSpace(line)
@@ -338,9 +350,13 @@ func readSimpleYAML(path string) (map[string]string, error) {
 		if !ok {
 			continue
 		}
-		values[strings.TrimSpace(key)] = strings.Trim(strings.TrimSpace(value), `"'`)
+		key = strings.TrimSpace(key)
+		if _, exists := values[key]; !exists {
+			keys = append(keys, key)
+		}
+		values[key] = strings.Trim(strings.TrimSpace(value), `"'`)
 	}
-	return values, nil
+	return keys, values, nil
 }
 
 func configValue(values map[string]string, prefix, key string) string {

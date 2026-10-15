@@ -1,0 +1,59 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os/signal"
+	"syscall"
+
+	"example.com/shop/configs"
+	"example.com/shop/databases"
+	"example.com/shop/middlewares"
+	"example.com/shop/pkg/logger"
+	"example.com/shop/pkg/response"
+	"example.com/shop/routes"
+	"github.com/gofiber/fiber/v2"
+	"github.com/spf13/viper"
+)
+
+func main() {
+	if err := configs.InitViper(); err != nil {
+		log.Fatalf("failed to initialize config: %v", err)
+	}
+	loggers, err := logger.Setup(viper.GetString("LOG_DIR"))
+	if err != nil {
+		log.Fatalf("failed to initialize logging: %v", err)
+	}
+	defer loggers.Close()
+	conn := databases.ConnectDB()
+
+	app := fiber.New(fiber.Config{
+		ReadBufferSize: 8192, BodyLimit: viper.GetInt("HTTP_BODY_LIMIT"), ErrorHandler: response.ErrorHandler,
+		ReadTimeout: viper.GetDuration("HTTP_READ_TIMEOUT"), WriteTimeout: viper.GetDuration("HTTP_WRITE_TIMEOUT"),
+		IdleTimeout: viper.GetDuration("HTTP_IDLE_TIMEOUT"),
+	})
+	app.Use(middlewares.RequestLogger(loggers))
+	routes.RegisterHealthRoutes(conn, app)
+	routes.RegisterRootRoutes(conn, app)
+
+	serverError := make(chan error, 1)
+	go func() { serverError <- app.Listen(fmt.Sprintf(":%d", viper.GetInt("APP_PORT"))) }()
+	shutdown, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	select {
+	case <-shutdown.Done():
+	case err := <-serverError:
+		if err != nil {
+			log.Printf("server stopped: %v", err)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), viper.GetDuration("SHUTDOWN_TIMEOUT"))
+	defer cancel()
+	if err := app.ShutdownWithContext(ctx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+	}
+	if sqlDB, err := conn.DB(); err == nil {
+		_ = sqlDB.Close()
+	}
+}

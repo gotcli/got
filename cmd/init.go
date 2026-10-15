@@ -48,7 +48,8 @@ HTTP timeouts, Dockerfile, and .dockerignore.
 Use --generate-crud to inspect an existing PostgreSQL or SQL Server schema and
 generate entity, repository, service, handler, and route layers. Missing host,
 database name, and username values are prompted. The database password is
-always read from a masked prompt; it is never accepted as a flag or saved.
+read from a masked prompt, or from GOT_DB_PASSWORD when no terminal is
+available; it is never accepted as a flag or saved.
 For a clearer two-step workflow, initialize first and run "got generate crud"
 from the generated service directory. The combined flag remains supported for
 backward compatibility.`,
@@ -71,6 +72,14 @@ backward compatibility.`,
     --db-host sql.internal --db-name billing --db-user app_user`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := requireFlags(cfg,
+				requiredFlag{"architecture", architecture == ""}, requiredFlag{"name", projectName == ""},
+				requiredFlag{"module", moduleName == ""}, requiredFlag{"db", database == ""},
+				requiredFlag{"db-host", generateCRUD && strings.TrimSpace(dbHost) == ""},
+				requiredFlag{"db-name", generateCRUD && dbName == ""}, requiredFlag{"db-user", generateCRUD && dbUser == ""},
+			); err != nil {
+				return err
+			}
 			ui := promtui.NewPromptUI()
 			stepOutput := cmd.ErrOrStderr()
 			var err error
@@ -156,7 +165,7 @@ backward compatibility.`,
 					}
 				}
 				fmt.Fprintf(stepOutput, "[step] connecting to %s and reading metadata\n", database)
-				password, err := ui.AskForPassword("Database password", true)
+				password, err := readDatabasePassword(cfg, ui)
 				if err != nil {
 					return err
 				}
@@ -188,7 +197,7 @@ backward compatibility.`,
 				Name: projectName, Module: moduleName, Architecture: architecture, Database: database, ParentPath: cfg.cwd,
 				DBHost: dbHost, DBPort: dbPort, DBName: dbName, DBUser: dbUser, Schema: schema,
 			}
-			if err := (generator.ProjectGenerator{Output: stepOutput}).Generate(cmd.Context(), options); err != nil {
+			if err := (generator.ProjectGenerator{Output: stepOutput, Version: cfg.version}).Generate(cmd.Context(), options); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "project %q is ready\n", projectName)
@@ -212,19 +221,26 @@ backward compatibility.`,
 }
 
 func newWorkspaceInitCommand(cfg *config) *cobra.Command {
-	var name, module, database, serviceList string
+	var name, module, database, serviceList, sharedModule, sharedVersion string
 	command := &cobra.Command{
 		Use: "workspace", Short: "Create a workspace containing multiple microservices",
 		Long: `Create a multi-module microservice workspace. Each service receives its own
 go.mod, configuration, health checks, Dockerfile, and deployment lifecycle.
-The workspace root contains go.work, compose.yml, Makefile, README, and a GOT
-manifest used by "got add service". Services never share entities or database
+The workspace root contains go.work, Makefile, README, and a GOT manifest;
+services live under services/ and Compose configuration under deploy/.
+Services never share entities or database
 repositories through the generated workspace.`,
 		Example: `  got init workspace --name restaurant-platform \
     --module example.com/restaurant-platform \
     --services order,pos,auth --db pg`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := requireFlags(cfg,
+				requiredFlag{"name", name == ""}, requiredFlag{"module", module == ""},
+				requiredFlag{"services", serviceList == ""}, requiredFlag{"db", database == ""},
+			); err != nil {
+				return err
+			}
 			ui := promtui.NewPromptUI()
 			var err error
 			if name == "" {
@@ -251,8 +267,8 @@ repositories through the generated workspace.`,
 					return err
 				}
 			}
-			options := generator.WorkspaceOptions{Name: name, Module: module, Database: database, ParentPath: cfg.cwd, Services: strings.Split(serviceList, ",")}
-			if err := (generator.WorkspaceGenerator{Output: cmd.ErrOrStderr()}).Generate(cmd.Context(), options); err != nil {
+			options := generator.WorkspaceOptions{Name: name, Module: module, Database: database, ParentPath: cfg.cwd, SharedModule: sharedModule, SharedVersion: sharedVersion, Services: strings.Split(serviceList, ",")}
+			if err := (generator.WorkspaceGenerator{Output: cmd.ErrOrStderr(), Version: cfg.version}).Generate(cmd.Context(), options); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "workspace %q is ready with services: %s\n", name, serviceList)
@@ -263,6 +279,8 @@ repositories through the generated workspace.`,
 	command.Flags().StringVarP(&module, "module", "m", "", "module prefix for child services")
 	command.Flags().StringVar(&serviceList, "services", "", "comma-separated services, for example order,pos,auth")
 	command.Flags().StringVarP(&database, "db", "d", "", "database driver for generated services: pg, mysql, or mssql")
+	command.Flags().StringVar(&sharedModule, "shared-module", "", "shared library module path (default: <workspace-module>/libs)")
+	command.Flags().StringVar(&sharedVersion, "shared-version", "v0.1.0", "version of an external --shared-module required by services")
 	return command
 }
 
