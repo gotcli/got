@@ -151,3 +151,53 @@ func TestWorkspaceGeneratorCleansNewServiceAfterFailure(t *testing.T) {
 		t.Fatalf("partial service was not cleaned: %v", statErr)
 	}
 }
+
+// A workspace created by GOT v1.0.4 keeps services at the root and has no libs
+// module; adding a service must follow that layout without moving anything.
+func TestWorkspaceGeneratorAddsServiceToLegacyLayout(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		workspaceManifestName:  `{"name":"ws","module":"example.com/ws","database":"pg","services":["order-service"]}`,
+		"go.work":              "go 1.25.0\n\nuse (\n\t./order-service\n)\n",
+		"compose.yml":          renderLegacyCompose([]string{"order-service"}),
+		"README.md":            "# ws\n\n" + workspaceServicesStart + "\n- order-service\n" + workspaceServicesEnd + "\n",
+		"order-service/go.mod": "module example.com/ws/order-service\n",
+	}
+	for name, content := range files {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runner := &recordedRunner{}
+	if err := (WorkspaceGenerator{Runner: runner}).AddService(context.Background(), root, "payment"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "payment-service", "main.go")); err != nil {
+		t.Fatalf("service not created at the workspace root: %v", err)
+	}
+	for _, path := range []string{workspaceServicesDir, "libs", workspaceDeployDir} {
+		if _, err := os.Stat(filepath.Join(root, path)); !os.IsNotExist(err) {
+			t.Errorf("legacy workspace gained %s", path)
+		}
+	}
+	assertFileContains(t, filepath.Join(root, "go.work"), "\t./order-service\n\t./payment-service\n")
+	assertFileContains(t, filepath.Join(root, "compose.yml"), "context: ./payment-service")
+	assertFileContains(t, filepath.Join(root, "compose.yml"), `"3002:3000"`)
+	assertFileContains(t, filepath.Join(root, "README.md"), "payment-service")
+	manifest, err := os.ReadFile(filepath.Join(root, workspaceManifestName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(manifest), "sharedModule") {
+		t.Errorf("legacy manifest gained shared module fields:\n%s", manifest)
+	}
+	for _, call := range runner.calls {
+		if strings.Contains(strings.Join(call, " "), "libs") {
+			t.Errorf("legacy service was linked to libs: %v", call)
+		}
+	}
+}

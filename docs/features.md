@@ -46,6 +46,35 @@ got init workspace \
   --db pg
 ```
 
+ตัวอย่าง hexagonal (ports and adapters):
+
+```sh
+got init service \
+  --name shop \
+  --module example.com/shop \
+  --architecture hexagonal \
+  --db pg
+```
+
+โครงสร้าง: `cmd/main.go`, `internal/{app.go,domain,port/{inbound,outbound},adapter/{inbound,outbound},model,migration/postgres}` และ `utils/`
+
+- `got generate crud` สร้างครบทุกชั้นต่อตาราง: model, inbound/outbound port,
+  registry, domain พร้อม unit test ที่ใช้ fake repository, postgres adapter,
+  fiber handler และ migration
+- Migration สร้างจากโครงสร้างตารางจริง (type, enum, default, NOT NULL, primary
+  key) เป็นแบบ idempotent รันด้วย `go run ./cmd migrate` ยังไม่รวม unique,
+  foreign key, check และ index
+- `got add swagger` วาง route และ spec ใน `internal/adapter/inbound/fiber/`
+  และ `got add auth --jwt` วาง JWT manager ใน `utils/auth/` และ middleware ใน
+  HTTP adapter
+- `got add migration <name>` สร้าง `internal/migration/postgres/<version>_<name>.go`
+  เวอร์ชันถัดไป migration ที่ยังไม่มี SQL จะถูกปฏิเสธตอน migrate เพื่อไม่ให้
+  ถูกบันทึกว่ารันแล้วก่อนเขียนเสร็จ
+- รองรับเฉพาะ PostgreSQL ส่วน `got api` และ `got add upload|method` ยังไม่รองรับ
+  hexagonal
+- โฟลเดอร์ `rabbitmq`, `http`, `redis` ถูกสร้างพร้อม `doc.go` เพื่อให้ Git
+  เก็บโฟลเดอร์ไว้ แต่ยังไม่มี adapter
+
 Project generation รองรับ PostgreSQL, MySQL และ SQL Server
 
 ### สร้าง API feature
@@ -153,6 +182,10 @@ got add swagger
 ```sh
 got add service notification
 ```
+
+Workspace ที่สร้างด้วย GOT v1.0.4 หรือเก่ากว่า (service อยู่ที่ root และไม่มี
+`libs/`) ยังเพิ่ม service ได้ ระบบจะสร้าง service ใหม่ที่ root และอัปเดต
+`compose.yml` กับ `go.work` ตาม layout เดิม โดยไม่ย้ายไฟล์ที่มีอยู่
 
 คำสั่งสร้าง service ใหม่ใน `services/` เชื่อมกับ shared module `libs/` และอัปเดต
 `go.work`, `deploy/compose.yml` และ workspace README โดยรักษา service และ port เดิมไว้

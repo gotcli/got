@@ -35,8 +35,8 @@ type workspaceManifest struct {
 	Name          string   `json:"name"`
 	Module        string   `json:"module"`
 	Database      string   `json:"database"`
-	SharedModule  string   `json:"sharedModule"`
-	SharedVersion string   `json:"sharedVersion"`
+	SharedModule  string   `json:"sharedModule,omitempty"`
+	SharedVersion string   `json:"sharedVersion,omitempty"`
 	Services      []string `json:"services"`
 }
 
@@ -123,13 +123,15 @@ func (g WorkspaceGenerator) AddService(ctx context.Context, root, name string) e
 			return fmt.Errorf("service %q already exists", service)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(root, "libs", "go.mod")); err != nil {
-		if os.IsNotExist(err) {
-			return errors.New("workspace has no libs/go.mod; it was created by an older GOT layout, recreate it with \"got init workspace\"")
-		}
+	legacy, err := isLegacyWorkspace(root)
+	if err != nil {
 		return err
 	}
 	serviceRoot := filepath.Join(root, workspaceServicesDir)
+	if legacy {
+		// Keep the workspace's own layout instead of moving existing services.
+		serviceRoot = root
+	}
 	servicePath := filepath.Join(serviceRoot, service)
 	if _, err := os.Stat(servicePath); err == nil {
 		return fmt.Errorf("service destination already exists: %s", servicePath)
@@ -140,16 +142,32 @@ func (g WorkspaceGenerator) AddService(ctx context.Context, root, name string) e
 		_ = os.RemoveAll(servicePath)
 		return err
 	}
-	runner := g.Runner
-	if runner == nil {
-		runner = ExecRunner{}
-	}
-	if err := configureWorkspaceService(ctx, runner, servicePath, manifest); err != nil {
-		_ = os.RemoveAll(servicePath)
-		return err
+	if !legacy {
+		runner := g.Runner
+		if runner == nil {
+			runner = ExecRunner{}
+		}
+		if err := configureWorkspaceService(ctx, runner, servicePath, manifest); err != nil {
+			_ = os.RemoveAll(servicePath)
+			return err
+		}
 	}
 	manifest.Services = append(manifest.Services, service)
-	return updateWorkspaceFiles(root, manifest)
+	return updateWorkspaceFiles(root, manifest, legacy)
+}
+
+// isLegacyWorkspace reports a workspace created by GOT v1.0.4 or earlier:
+// services at the root, compose.yml at the root, and no shared libs module.
+func isLegacyWorkspace(root string) (bool, error) {
+	if _, err := os.Stat(filepath.Join(root, "libs", "go.mod")); err == nil {
+		return false, nil
+	} else if !os.IsNotExist(err) {
+		return false, err
+	}
+	if _, err := os.Stat(filepath.Join(root, workspaceServicesDir)); err == nil {
+		return false, errors.New("workspace has services/ but no libs/go.mod; restore libs/go.mod before adding a service")
+	}
+	return true, nil
 }
 
 func normalizeServices(values []string) ([]string, error) {
@@ -223,13 +241,17 @@ func writeWorkspaceFiles(root string, manifest workspaceManifest) error {
 	return nil
 }
 
-func updateWorkspaceFiles(root string, manifest workspaceManifest) error {
+func updateWorkspaceFiles(root string, manifest workspaceManifest, legacy bool) error {
 	encoded, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return err
 	}
 	encoded = append(encoded, '\n')
-	for name, content := range map[string][]byte{workspaceManifestName: encoded, "go.work": []byte(renderGoWork(manifest.Services)), filepath.Join(workspaceDeployDir, "compose.yml"): []byte(renderCompose(manifest.Services))} {
+	files := map[string][]byte{workspaceManifestName: encoded, "go.work": []byte(renderGoWork(manifest.Services)), filepath.Join(workspaceDeployDir, "compose.yml"): []byte(renderCompose(manifest.Services))}
+	if legacy {
+		files = map[string][]byte{workspaceManifestName: encoded, "go.work": []byte(renderLegacyGoWork(manifest.Services)), "compose.yml": []byte(renderLegacyCompose(manifest.Services))}
+	}
+	for name, content := range files {
 		if err := writeOrReplaceFile(filepath.Join(root, name), content); err != nil {
 			return err
 		}
@@ -275,6 +297,27 @@ func renderGoWork(services []string) string {
 	b.WriteString(")\n")
 	return b.String()
 }
+
+// renderLegacyGoWork and renderLegacyCompose reproduce the GOT v1.0.4 layout.
+func renderLegacyGoWork(services []string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "go %s\ntoolchain %s\n\nuse (\n", toolchain.GoVersion, toolchain.GoToolchain)
+	for _, service := range services {
+		fmt.Fprintf(&b, "\t./%s\n", service)
+	}
+	b.WriteString(")\n")
+	return b.String()
+}
+
+func renderLegacyCompose(services []string) string {
+	var b strings.Builder
+	b.WriteString("services:\n")
+	for index, service := range services {
+		fmt.Fprintf(&b, "  %s:\n    build:\n      context: ./%s\n    ports:\n      - \"%d:3000\"\n    restart: unless-stopped\n", service, service, 3001+index)
+	}
+	return b.String()
+}
+
 func renderCompose(services []string) string {
 	var b strings.Builder
 	b.WriteString("services:\n")

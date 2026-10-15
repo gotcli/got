@@ -77,8 +77,11 @@ func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) 
 	if options.Architecture == "" {
 		options.Architecture = "standard"
 	}
-	if options.Architecture != "standard" && options.Architecture != "microservice" {
-		return fmt.Errorf("unsupported architecture %q (supported: standard, microservice)", options.Architecture)
+	if options.Architecture != "standard" && options.Architecture != "microservice" && options.Architecture != hexagonalArchitecture {
+		return fmt.Errorf("unsupported architecture %q (supported: standard, microservice, hexagonal)", options.Architecture)
+	}
+	if options.Architecture == hexagonalArchitecture && options.Database != "pg" {
+		return fmt.Errorf("hexagonal architecture currently supports only --db pg (its outbound adapter and migrations are PostgreSQL)")
 	}
 	database, ok := databases[options.Database]
 	if !ok {
@@ -128,6 +131,13 @@ func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) 
 		"routes/root.go": blueprints.RouteRoot,
 		"routes/v1.go":   blueprints.RouteV1,
 	}
+	if options.Architecture == hexagonalArchitecture {
+		var err error
+		if files, err = hexagonalFiles(); err != nil {
+			return err
+		}
+		files[".gitignore"] = trimLineIndent(blueprints.GitIgnore)
+	}
 	if options.Architecture == "microservice" {
 		files["main.go"] = blueprints.MicroserviceMain
 		files["routes/health.go"] = blueprints.MicroserviceHealth
@@ -176,7 +186,11 @@ func (g ProjectGenerator) Generate(ctx context.Context, options ProjectOptions) 
 	}
 	if options.Schema != nil {
 		g.logStep("generating CRUD for %d database objects", len(options.Schema.Tables))
-		if err := (APIGenerator{}).GenerateCRUD(projectPath, *options.Schema); err != nil {
+		generate := (APIGenerator{}).GenerateCRUD
+		if options.Architecture == hexagonalArchitecture {
+			generate = GenerateHexagonalCRUD
+		}
+		if err := generate(projectPath, *options.Schema); err != nil {
 			return fmt.Errorf("generate database CRUD: %w", err)
 		}
 	}

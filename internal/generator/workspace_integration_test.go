@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/gotcli/got/internal/dbschema"
 )
 
 // TestWorkspaceGeneratorOutputBuildsWithRealGo runs the real Go toolchain over a
@@ -52,4 +54,33 @@ func runGo(t *testing.T, ctx context.Context, dir, gowork string, args ...string
 	if output, err := command.CombinedOutput(); err != nil {
 		t.Fatalf("go %v in %s (GOWORK=%q) failed: %v\n%s", args, dir, gowork, err, output)
 	}
+}
+
+// TestHexagonalOutputBuildsAndTestsWithRealGo compiles a hexagonal project with
+// CRUD, Swagger, JWT, and a migration, and runs its generated domain tests.
+func TestHexagonalOutputBuildsAndTestsWithRealGo(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test runs the Go toolchain and downloads modules")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go toolchain not found in PATH")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	project := generateHexagonalProject(t, ExecRunner{})
+	if err := GenerateHexagonalCRUD(project, dbschema.Database{Schema: "public", Tables: []dbschema.Table{productsTable()}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := (SwaggerGenerator{}).Generate(project); err != nil {
+		t.Fatal(err)
+	}
+	if err := (AuthGenerator{Runner: ExecRunner{}}).Generate(ctx, project, AuthOptions{JWT: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (MigrationGenerator{}).Generate(project, "add_index"); err != nil {
+		t.Fatal(err)
+	}
+	runGo(t, ctx, project, "off", "mod", "tidy")
+	runGo(t, ctx, project, "off", "vet", "./...")
+	runGo(t, ctx, project, "off", "test", "./...")
 }

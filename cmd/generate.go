@@ -162,8 +162,15 @@ database or schema it owns.`,
 			if err != nil {
 				return err
 			}
+			plan, generate := (generator.APIGenerator{}).PlanCRUD, (generator.APIGenerator{}).GenerateCRUD
+			if generator.IsHexagonal(cfg.cwd) {
+				if connection.Driver != "pg" {
+					return fmt.Errorf("hexagonal projects support CRUD generation from PostgreSQL only")
+				}
+				plan, generate = generator.PlanHexagonalCRUD, generator.GenerateHexagonalCRUD
+			}
 			if dryRun {
-				planned, err := (generator.APIGenerator{}).PlanCRUD(cfg.cwd, inspected)
+				planned, err := plan(cfg.cwd, inspected)
 				if err != nil {
 					return crudGenerationError(err)
 				}
@@ -173,7 +180,7 @@ database or schema it owns.`,
 				}
 				return nil
 			}
-			if err := (generator.APIGenerator{}).GenerateCRUD(cfg.cwd, inspected); err != nil {
+			if err := generate(cfg.cwd, inspected); err != nil {
 				return crudGenerationError(err)
 			}
 			if dependencies.runner != nil {
@@ -232,7 +239,7 @@ func selectTables(database dbschema.Database, names []string) (dbschema.Database
 }
 
 func crudGenerationError(err error) error {
-	if message := err.Error(); strings.Contains(message, "refusing to overwrite") || strings.Contains(message, "is already registered") {
+	if message := err.Error(); strings.Contains(message, "refusing to overwrite") || strings.Contains(message, "is already registered") || strings.Contains(message, "already registers") {
 		return fmt.Errorf("generate CRUD: %w\nhint: CRUD already exists for some tables; use --tables to generate only new ones", err)
 	}
 	return fmt.Errorf("generate CRUD: %w", err)

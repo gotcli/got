@@ -36,6 +36,8 @@ func TestCommandHelpIncludesWorkflowsAndExamples(t *testing.T) {
 		{args: []string{"add", "service", "--help"}, expected: []string{"got-workspace.json", "got add service payment"}},
 		{args: []string{"doctor", "--help"}, expected: []string{"--project", "--connect", "--json", "Secret values are never printed"}},
 		{args: []string{"generate", "crud", "--help"}, expected: []string{"current project's database", "masked prompt", "workspace root", "commerce-platform/services/order-service", "--db-schema", "--tables", "--dry-run"}},
+		{args: []string{"init", "--help"}, expected: []string{"standard, microservice, or hexagonal", "Hexagonal mode", "go run ./cmd migrate"}},
+		{args: []string{"add", "migration", "--help"}, expected: []string{"schema_migrations", "go run ./cmd migrate", "without statements is refused"}},
 		{args: []string{"routes", "--help"}, expected: []string{"func main", "{dynamic}", "--json"}},
 		{args: []string{"config", "--help"}, expected: []string{"<PREFIX>_<KEY>", "never printed", "--json"}},
 		{args: []string{"upgrade", "--help"}, expected: []string{"--dry-run", "uncommitted Git changes", "manual action"}},

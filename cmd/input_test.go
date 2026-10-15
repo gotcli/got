@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -49,4 +50,18 @@ func TestReadDatabasePassword(t *testing.T) {
 			t.Fatalf("password=%q err=%v calls=%d", password, err, prompt.calls)
 		}
 	})
+}
+
+func TestLayeredGeneratorsRejectHexagonalProjects(t *testing.T) {
+	project := t.TempDir()
+	writeDoctorFile(t, filepath.Join(project, "got-project.json"), `{"architecture":"hexagonal"}`)
+	for _, args := range [][]string{{"api", "--name", "users"}, {"add", "upload"}, {"add", "method", "--folder", "orders", "--name", "Approve"}} {
+		command := NewRootCommand("test")
+		command.SetArgs(args)
+		t.Chdir(project)
+		err := command.Execute()
+		if err == nil || !strings.Contains(err.Error(), "does not support hexagonal projects") {
+			t.Errorf("%v: got %v", args, err)
+		}
+	}
 }

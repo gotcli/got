@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/gotcli/got/internal/generator"
 )
 
 // databasePasswordEnv supplies the inspection password when no terminal is
@@ -41,4 +43,13 @@ func readDatabasePassword(cfg *config, prompt passwordPrompter) (string, error) 
 		return "", fmt.Errorf("database password is required: set %s (interactive prompts are unavailable without a terminal or with --no-input)", databasePasswordEnv)
 	}
 	return prompt.AskForPassword("Database password", true)
+}
+
+// rejectHexagonal stops generators that only understand the standard and
+// microservice layouts from writing into a hexagonal project.
+func rejectHexagonal(projectPath, command string) error {
+	if generator.IsHexagonal(projectPath) {
+		return fmt.Errorf("%s does not support hexagonal projects yet; use \"got generate crud\" for entities", command)
+	}
+	return nil
 }

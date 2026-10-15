@@ -37,3 +37,9 @@ func EncodeProjectManifest(manifest ProjectManifest) ([]byte, error) {
 	}
 	return append(encoded, '\n'), nil
 }
+
+// IsHexagonal reports whether got-project.json declares the hexagonal layout.
+func IsHexagonal(projectPath string) bool {
+	manifest, err := ReadProjectManifest(projectPath)
+	return err == nil && manifest.Architecture == hexagonalArchitecture
+}

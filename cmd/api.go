@@ -23,6 +23,9 @@ working implementations should be generated from a database schema.`,
   got api --name order_items`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := rejectHexagonal(cfg.cwd, "got api"); err != nil {
+				return err
+			}
 			if err := (generator.APIGenerator{}).Generate(cfg.cwd, name); err != nil {
 				return err
 			}

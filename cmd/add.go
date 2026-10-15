@@ -16,7 +16,8 @@ func newAddCommand(cfg *config) *cobra.Command {
 Use "got add method" to extend a feature across repository, service, handler,
 and route layers. Use "got add auth --jwt" to install local JWT support,
 "got add upload" to add a secure multipart file upload endpoint, or
-"got add swagger" to serve an OpenAPI specification and Swagger UI.`,
+"got add swagger" to serve an OpenAPI specification and Swagger UI. In
+hexagonal projects, "got add migration" adds a numbered database migration.`,
 		Example: `  got add method --folder orders --name Approve --http-method PATCH
   got add auth --jwt
   got add upload
@@ -59,6 +60,9 @@ and the default extensions are .jpg, .jpeg, .png, and .pdf.`,
   curl -F "file=@document.pdf" http://127.0.0.1:3000/api/uploads`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := rejectHexagonal(cfg.cwd, "got add upload"); err != nil {
+				return err
+			}
 			if err := (generator.UploadGenerator{}).Generate(cfg.cwd); err != nil {
 				return err
 			}
@@ -125,6 +129,9 @@ the kebab-case method name, such as /publish-order.`,
   got add method --folder payments --name Capture`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := rejectHexagonal(cfg.cwd, "got add method"); err != nil {
+				return err
+			}
 			if err := (generator.MethodGenerator{}).Generate(cfg.cwd, options); err != nil {
 				return err
 			}
@@ -138,6 +145,25 @@ the kebab-case method name, such as /publish-order.`,
 	method.Flags().StringVar(&options.Path, "path", "", "Fiber route path (default: kebab-case method name)")
 	_ = method.MarkFlagRequired("name")
 	_ = method.MarkFlagRequired("folder")
-	add.AddCommand(auth, method, service, swagger, upload)
+	migration := &cobra.Command{
+		Use: "migration [name]", Short: "Add a numbered database migration (hexagonal projects)",
+		Long: `Create internal/migration/postgres/<version>_<name>.go with the next
+version number. Add SQL statements to its Up list, then apply pending
+migrations with "go run ./cmd migrate". Migrations run once, in version order,
+each in its own transaction, and are recorded in schema_migrations. A migration
+without statements is refused, so it cannot be recorded before it is written.`,
+		Example: `  got add migration add_products_name_index
+  go run ./cmd migrate`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := (generator.MigrationGenerator{}).Generate(cfg.cwd, args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "created %s\nadd SQL to Up, then run: go run ./cmd migrate\n", path)
+			return nil
+		},
+	}
+	add.AddCommand(auth, method, migration, service, swagger, upload)
 	return add
 }

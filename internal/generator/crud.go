@@ -76,6 +76,21 @@ func (APIGenerator) PlanCRUD(projectPath string, database dbschema.Database) ([]
 }
 
 func prepareCRUD(projectPath string, database dbschema.Database) ([]crudData, error) {
+	items, err := buildCRUDData(projectPath, database)
+	if err != nil {
+		return nil, err
+	}
+	for _, data := range items {
+		if err := preflightCRUDTable(projectPath, data); err != nil {
+			return nil, err
+		}
+	}
+	return items, nil
+}
+
+// buildCRUDData validates the tables and derives naming and field data shared
+// by every architecture.
+func buildCRUDData(projectPath string, database dbschema.Database) ([]crudData, error) {
 	module, err := readModuleName(filepath.Join(projectPath, "go.mod"))
 	if err != nil {
 		return nil, err
@@ -117,11 +132,6 @@ func prepareCRUD(projectPath string, database dbschema.Database) ([]crudData, er
 			ParseID: parseID(primaryType), RequestFields: requestFields, SchemaImports: schemaImports,
 		}
 		items = append(items, data)
-	}
-	for _, data := range items {
-		if err := preflightCRUDTable(projectPath, data); err != nil {
-			return nil, err
-		}
 	}
 	return items, nil
 }

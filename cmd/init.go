@@ -43,7 +43,11 @@ func newServiceInitCommand(cfg *config) *cobra.Command {
 When project, module, architecture, or database flags are omitted, GOT asks for
 them interactively. Standard mode generates the layered API foundation.
 Microservice mode additionally generates health endpoints, graceful shutdown,
-HTTP timeouts, Dockerfile, and .dockerignore.
+HTTP timeouts, Dockerfile, and .dockerignore. Hexagonal mode generates a ports
+and adapters layout (cmd/, internal/domain, internal/port, internal/adapter,
+internal/model, internal/migration, utils/) with graceful shutdown, health
+endpoints, a migration runner ("go run ./cmd migrate"), and domain unit tests;
+it currently supports PostgreSQL only.
 
 Use --generate-crud to inspect an existing PostgreSQL or SQL Server schema and
 generate entity, repository, service, handler, and route layers. Missing host,
@@ -87,6 +91,7 @@ backward compatibility.`,
 				architecture, err = ui.AskForSelect("Choose project architecture", []huh.Option[string]{
 					huh.NewOption("Standard API", "standard"),
 					huh.NewOption("Microservice", "microservice"),
+					huh.NewOption("Hexagonal (ports and adapters, PostgreSQL)", "hexagonal"),
 				}, true)
 				if err != nil {
 					return err
@@ -210,7 +215,7 @@ backward compatibility.`,
 	command.Flags().StringVarP(&projectName, "name", "n", "", "destination directory name using lowercase letters, hyphens, or underscores")
 	command.Flags().StringVarP(&moduleName, "module", "m", "", "Go module import path, for example example.com/ordering")
 	command.Flags().StringVarP(&database, "db", "d", "", "database driver: pg, mysql, or mssql")
-	command.Flags().StringVarP(&architecture, "architecture", "a", "", "project mode: standard or microservice")
+	command.Flags().StringVarP(&architecture, "architecture", "a", "", "project mode: standard, microservice, or hexagonal")
 	command.Flags().BoolVar(&generateCRUD, "generate-crud", false, "inspect a PostgreSQL or SQL Server schema and generate executable CRUD")
 	command.Flags().StringVar(&dbHost, "db-host", "", "database host (prompted when --generate-crud is enabled)")
 	command.Flags().Uint16Var(&dbPort, "db-port", 0, "database port (default: 5432 pg, 1433 mssql, 3306 mysql)")

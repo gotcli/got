@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/gotcli/got/internal/dbschema"
@@ -38,7 +39,9 @@ func Introspect(ctx context.Context, input Config) (dbschema.Database, error) {
 
 	rows, err := db.QueryContext(ctx, `
 		SELECT c.table_name, c.column_name, c.data_type, c.udt_name,
-		       c.is_nullable = 'YES', c.column_default IS NOT NULL
+		       c.is_nullable = 'YES', c.column_default IS NOT NULL OR c.is_identity = 'YES',
+		       c.column_default, c.is_identity = 'YES', c.character_maximum_length,
+		       c.numeric_precision, c.numeric_scale
 		FROM information_schema.columns c
 		JOIN information_schema.tables t
 		  ON t.table_schema = c.table_schema AND t.table_name = c.table_name
@@ -54,9 +57,16 @@ func Introspect(ctx context.Context, input Config) (dbschema.Database, error) {
 	for rows.Next() {
 		var tableName string
 		var column dbschema.Column
-		if err := rows.Scan(&tableName, &column.Name, &column.DataType, &column.UDTName, &column.Nullable, &column.HasDefault); err != nil {
+		var defaultExpr sql.NullString
+		var charLength, precision, scale sql.NullInt64
+		if err := rows.Scan(&tableName, &column.Name, &column.DataType, &column.UDTName, &column.Nullable, &column.HasDefault,
+			&defaultExpr, &column.Identity, &charLength, &precision, &scale); err != nil {
 			return dbschema.Database{}, fmt.Errorf("scan column: %w", err)
 		}
+		column.DefaultExpr = defaultExpr.String
+		column.CharLength = int(charLength.Int64)
+		column.NumericPrecision = int(precision.Int64)
+		column.NumericScale = int(scale.Int64)
 		index, ok := tableIndexes[tableName]
 		if !ok {
 			index = len(result.Tables)

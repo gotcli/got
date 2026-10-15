@@ -61,7 +61,11 @@ func Scan(projectPath string) ([]Route, error) {
 	}
 	entry, ok := s.functions[functionKey(".", "main")]
 	if !ok {
-		return nil, fmt.Errorf("func main not found in %s", projectPath)
+		// Layouts such as hexagonal keep the entry point in cmd/.
+		entry, ok = s.functions[functionKey("cmd", "main")]
+	}
+	if !ok {
+		return nil, fmt.Errorf("func main not found in %s or %s", projectPath, filepath.Join(projectPath, "cmd"))
 	}
 	s.walk(entry, map[string]string{})
 	sort.SliceStable(s.routes, func(i, j int) bool {
@@ -161,6 +165,10 @@ func (s *scanner) walk(fn function, env map[string]string) {
 			if !ok {
 				return true
 			}
+			if typeName := compositeType(node.Rhs[0]); typeName != "" {
+				constructors[name.Name] = typeName
+				return true
+			}
 			call, ok := node.Rhs[0].(*ast.CallExpr)
 			if !ok {
 				return true
@@ -233,9 +241,9 @@ func (s *scanner) call(call *ast.CallExpr, env, constructors map[string]string, 
 			calleeEnv[params[index]] = prefix
 		}
 	}
-	if len(calleeEnv) > 0 {
-		s.walk(callee, calleeEnv)
-	}
+	// Functions called without a router can still create one, such as a
+	// NewServer that calls fiber.New.
+	s.walk(callee, calleeEnv)
 }
 
 // resolve finds a project function called as Func(...) or pkg.Func(...).
@@ -300,6 +308,21 @@ func literal(expression ast.Expr) string {
 		}
 	}
 	return "{dynamic}"
+}
+
+// compositeType returns T for T{...} or &T{...}.
+func compositeType(expression ast.Expr) string {
+	if unary, ok := expression.(*ast.UnaryExpr); ok && unary.Op == token.AND {
+		expression = unary.X
+	}
+	literal, ok := expression.(*ast.CompositeLit)
+	if !ok {
+		return ""
+	}
+	if ident, ok := literal.Type.(*ast.Ident); ok {
+		return ident.Name
+	}
+	return ""
 }
 
 func calleeName(call *ast.CallExpr) string {

@@ -28,6 +28,18 @@ func (g AuthGenerator) Generate(ctx context.Context, projectPath string, options
 		"pkg/auth/jwt.go":    blueprints.JWTManager,
 		"middlewares/jwt.go": blueprints.JWTMiddleware,
 	}
+	if IsHexagonal(projectPath) {
+		middleware, err := rebase("JWTMiddleware", blueprints.JWTMiddleware,
+			"package middlewares", "package fiber",
+			"{{ .ModuleName }}/pkg/auth", "{{ .ModuleName }}/utils/auth")
+		if err != nil {
+			return err
+		}
+		files = map[string]string{
+			"utils/auth/jwt.go":                     blueprints.JWTManager,
+			"internal/adapter/inbound/fiber/jwt.go": middleware,
+		}
+	}
 	for path := range files {
 		if _, err := os.Stat(filepath.Join(projectPath, path)); err == nil {
 			return fmt.Errorf("authentication already exists: %s", path)

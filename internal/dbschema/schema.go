@@ -18,4 +18,11 @@ type Column struct {
 	Nullable   bool
 	HasDefault bool
 	EnumValues []string
+	// The fields below are populated by PostgreSQL introspection and used to
+	// reconstruct table DDL for migrations.
+	DefaultExpr      string
+	Identity         bool
+	CharLength       int
+	NumericPrecision int
+	NumericScale     int
 }
